@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Candidate",
+  "description": "An immutable candidate artifact plus its research provenance. Archive ancestry is separate from scientific dependency edges in the box.",
+  "type": "object",
+  "required": ["id", "bundle_hash", "files", "created", "action_mode", "research_parent_id",
+               "code_base_id", "donor_ids", "origin_id", "evidence_snapshot_id", "proposal", "notes"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string", "pattern": "^c_[0-9a-f]{16}$"},
+    "bundle_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "required": ["model.py"]},
+    "created": {"type": "number"},
+    "action_mode": {"enum": ["seed", "control", "manual", "continuation", "challenge", "reconstruction"]},
+    "research_parent_id": {"type": ["string", "null"]},
+    "code_base_id": {"type": ["string", "null"]},
+    "donor_ids": {"type": "array", "items": {"type": "string"}},
+    "origin_id": {"type": ["string", "null"]},
+    "evidence_snapshot_id": {"type": ["string", "null"]},
+    "proposal": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/proposal"}]},
+    "notes": {"type": "string"}
+  },
+  "$defs": {
+    "proposal": {
+      "description": "Recorded before any result is observed.",
+      "type": "object",
+      "required": ["commitment", "change", "mechanism", "prediction", "control", "test", "scope"],
+      "properties": {
+        "commitment": {"type": "string", "description": "The commitment being questioned (box node IDs or prose)."},
+        "change": {"type": "string"},
+        "mechanism": {"type": "string"},
+        "prediction": {"type": "string"},
+        "control": {"type": "string"},
+        "test": {"type": "string"},
+        "scope": {"type": "string"}
+      }
+    }
+  }
+}

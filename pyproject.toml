@@ -1,0 +1,21 @@
+[project]
+name = "cspace"
+version = "0.1.0"
+description = "Research harness for transformational-creativity experiments on small causal language models"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.3",
+    "numpy",
+    "datasets",
+    "pandas",
+    "tokenizers",
+    "jsonschema",
+    "openai",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::UserWarning"]

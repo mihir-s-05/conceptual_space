@@ -1,0 +1,991 @@
+{
+  "id": "lm-state-compute",
+  "version": 0,
+  "parent_version": null,
+  "context": {
+    "fixed_requirements": [
+      "Next-token prediction on the frozen task corpus with its fixed tokenizer (vocabulary 4096), context length 512, and batch 32",
+      "Causal prefix access only: the prediction at t depends only on tokens <= t of the same sequence",
+      "No state carried across sequences, batch rows, or evaluation calls",
+      "Equal training-FLOP budget per candidate, counted as executed, with the same data order and init seed for paired comparison",
+      "Evaluator, data splits, and engineering checks are fixed; the confirm split is sealed",
+      "At most 60M parameters"
+    ],
+    "editable_priors": [
+      "Matched training FLOPs is the fair comparison (rather than matched parameters or wall-clock)",
+      "Early-checkpoint dev loss is informative about longer-run dev loss (Stage A tests this)",
+      "Results reported at 70M-8B transfer qualitatively to 5-30M models",
+      "Average next-token loss is the primary utility; mechanism-specific probes are diagnostics"
+    ],
+    "permitted_constructions": [
+      "Any torch modules, including custom recurrences over depth or sequence within one forward pass",
+      "Per-token adaptive computation, with an auxiliary loss returned as aux_loss",
+      "Parameter sharing, routing, gating, extra latent positions, or new state variables within a sequence",
+      "Recipe changes within the allowed train_config bounds"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "def.state",
+      "type": "definition",
+      "statement": "At each layer l the model's state for a sequence is one hidden vector h_t^l in R^d per position t; the prediction at t reads only states at positions <= t.",
+      "scope": "causal decoders in this task",
+      "sources": [
+        "arXiv:1706.03762 Vaswani+ 2017, Attention Is All You Need"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": []
+    },
+    {
+      "id": "def.mixing",
+      "type": "definition",
+      "statement": "Sequence mixing moves information between positions (attention, convolution, or recurrence); channel mixing transforms each position's vector on its own (feed-forward layers).",
+      "scope": "sequence models generally",
+      "sources": [
+        "arXiv:2403.17844 Poli+ 2024, Mechanistic Design and Scaling of Hybrid Architectures (MAD)"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": []
+    },
+    {
+      "id": "def.compute",
+      "type": "definition",
+      "statement": "Compute is FLOPs as executed: per-token cost is the FLOPs spent on one position in one forward pass; training cost is total executed training FLOPs, the fixed budget each candidate receives in this study.",
+      "scope": "this study's accounting",
+      "sources": [
+        "arXiv:2001.08361 Kaplan+ 2020, Scaling Laws for Neural Language Models",
+        "cspace profile on this harness (measured, Nov 2026)"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": []
+    },
+    {
+      "id": "def.recall",
+      "type": "definition",
+      "statement": "Associative recall: predicting a token by retrieving the value bound to a key that appeared earlier in the context (multi-query associative recall, MQAR); induction heads are the attention mechanism for it.",
+      "scope": "in-context retrieval in LMs",
+      "sources": [
+        "arXiv:2312.04927 Arora+ 2023, Zoology",
+        "arXiv:2209.11895 Olsson+ 2022, In-context Learning and Induction Heads"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "c.fixed_depth",
+      "type": "assumption",
+      "statement": "Every position receives the same computation: L blocks, each applied exactly once, in a fixed order.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:1706.03762 Vaswani+ 2017, Attention Is All You Need",
+        "arXiv:2302.13971 Touvron+ 2023, LLaMA"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "def.state",
+          "def.compute"
+        ]
+      ]
+    },
+    {
+      "id": "c.unshared",
+      "type": "assumption",
+      "statement": "Each block has its own parameters, so parameter count grows linearly with depth and no computation is reused across depth.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:1706.03762 Vaswani+ 2017, Attention Is All You Need"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "c.fixed_depth"
+        ]
+      ]
+    },
+    {
+      "id": "c.token_granularity",
+      "type": "assumption",
+      "statement": "The unit of state and computation is the input token: no extra latent positions (memory or register tokens), and positions are never merged, split, or skipped.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:1706.03762 Vaswani+ 2017, Attention Is All You Need"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "def.state"
+        ]
+      ]
+    },
+    {
+      "id": "c.kv_memory",
+      "type": "assumption",
+      "statement": "Sequence memory is the uncompressed set of all past keys and values at every layer, read by causal softmax attention; memory grows linearly with context and is never summarized.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:1706.03762 Vaswani+ 2017, Attention Is All You Need"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "def.mixing",
+          "e.recall_gap"
+        ]
+      ],
+      "notes": "Justified mainly by recall: attention is the strongest known mechanism for associative recall."
+    },
+    {
+      "id": "c.single_stream",
+      "type": "assumption",
+      "statement": "Information passes between blocks through one additive residual stream of width d: h^{l+1} = h^l + f_l(norm(h^l)). Block outputs are summed, never gated, weighted by depth, or routed between multiple streams.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:1512.03385 He+ 2015, Deep Residual Learning",
+        "arXiv:1706.03762 Vaswani+ 2017, Attention Is All You Need"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "c.fixed_depth"
+        ]
+      ]
+    },
+    {
+      "id": "c.dense_ffn",
+      "type": "assumption",
+      "statement": "Channel mixing is one dense SwiGLU feed-forward layer per block, applied identically to every token.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:2002.05202 Shazeer 2020, GLU Variants Improve Transformer",
+        "arXiv:2302.13971 Touvron+ 2023, LLaMA"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "def.mixing",
+          "e.glu"
+        ]
+      ]
+    },
+    {
+      "id": "c.rope",
+      "type": "method",
+      "statement": "Position enters only through rotary embeddings applied to attention queries and keys; there is no absolute position embedding.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:2104.09864 Su+ 2021, RoFormer (RoPE)",
+        "arXiv:2302.13971 Touvron+ 2023, LLaMA"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "c.kv_memory"
+        ]
+      ],
+      "notes": "RoPE is a construction on attention queries and keys, so it depends on the attention memory."
+    },
+    {
+      "id": "c.prenorm",
+      "type": "method",
+      "statement": "Each sublayer input is normalized with RMSNorm (pre-norm); queries, keys, and block outputs are not normalized.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:1910.07467 Zhang & Sennrich 2019, RMSNorm",
+        "arXiv:2002.04745 Xiong+ 2020, On Layer Normalization in the Transformer Architecture",
+        "arXiv:2302.13971 Touvron+ 2023, LLaMA"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "c.single_stream",
+          "e.prenorm"
+        ]
+      ]
+    },
+    {
+      "id": "c.tied",
+      "type": "method",
+      "statement": "The input embedding and the output projection share one matrix.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:1608.05859 Press & Wolf 2016, Using the Output Embedding",
+        "arXiv:1611.01462 Inan+ 2016, Tying Word Vectors and Word Classifiers"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "e.tied_small"
+        ]
+      ]
+    },
+    {
+      "id": "m.baseline",
+      "type": "method",
+      "statement": "Llama-style causal decoder (Transformer++): the starting formulation, assembled from the commitments above.",
+      "scope": "d_model 256, 6 layers, 4 heads: 5.9M parameters at vocabulary 4096",
+      "sources": [
+        "arXiv:2302.13971 Touvron+ 2023, LLaMA",
+        "arXiv:2403.17844 Poli+ 2024, Mechanistic Design and Scaling of Hybrid Architectures (MAD)",
+        "cspace profile on this harness (measured, Nov 2026)"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "c.fixed_depth",
+          "c.unshared",
+          "c.token_granularity",
+          "c.kv_memory",
+          "c.single_stream",
+          "c.dense_ffn",
+          "c.rope",
+          "c.prenorm",
+          "c.tied"
+        ]
+      ]
+    },
+    {
+      "id": "t.kv_cost",
+      "type": "theorem",
+      "statement": "Under c.kv_memory, attention compute per token and inference memory grow linearly with the position in the context.",
+      "scope": "exact for softmax attention",
+      "sources": [
+        "arXiv:1706.03762 Vaswani+ 2017, Attention Is All You Need"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "c.kv_memory"
+        ]
+      ]
+    },
+    {
+      "id": "t.uniform_compute",
+      "type": "theorem",
+      "statement": "Under c.fixed_depth and c.dense_ffn, every token gets identical executed FLOPs regardless of how hard it is to predict.",
+      "scope": "exact for the starting decoder",
+      "sources": [
+        "arXiv:2404.02258 Raposo+ 2024, Mixture-of-Depths"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "c.fixed_depth",
+          "c.dense_ffn"
+        ]
+      ]
+    },
+    {
+      "id": "t.depth_bound",
+      "type": "theorem",
+      "statement": "Under c.fixed_depth, the serial computation available to a prediction within one forward pass is bounded by the L block applications; more serial steps require more depth, iteration, or extra tokens.",
+      "scope": "conditional on a fixed, non-iterated stack",
+      "sources": [
+        "arXiv:1807.03819 Dehghani+ 2018, Universal Transformers",
+        "arXiv:2301.13196 Giannou+ 2023, Looped Transformers as Programmable Computers"
+      ],
+      "status": "conditional",
+      "active": true,
+      "supports": [
+        [
+          "c.fixed_depth"
+        ]
+      ],
+      "notes": "Formal circuit-complexity bounds for fixed-depth transformers exist, but no citation for them was verified in this sweep."
+    },
+    {
+      "id": "t.linear_attn_is_rnn",
+      "type": "theorem",
+      "statement": "Causal attention with a kernel feature map in place of softmax is a recurrence with a fixed-size matrix state updated by outer products; it trains in parallel and generates recurrently.",
+      "scope": "exact",
+      "sources": [
+        "arXiv:2006.16236 Katharopoulos+ 2020, Transformers are RNNs",
+        "arXiv:2102.11174 Schlag+ 2021, Linear Transformers Are Secretly Fast Weight Programmers"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "def.mixing"
+        ]
+      ]
+    },
+    {
+      "id": "t.fast_weights",
+      "type": "theorem",
+      "statement": "Linear attention is equivalent to a fast-weight programmer; purely additive outer-product updates have limited memory capacity, which motivates error-correcting (delta-rule) updates.",
+      "scope": "theory plus synthetic retrieval",
+      "sources": [
+        "arXiv:2102.11174 Schlag+ 2021, Linear Transformers Are Secretly Fast Weight Programmers"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "t.linear_attn_is_rnn"
+        ]
+      ]
+    },
+    {
+      "id": "e.recall_gap",
+      "type": "empirical_claim",
+      "statement": "Fixed-state gated-convolution models trail attention by up to 2.1 perplexity on the Pile; tokens that need associative recall (6.4% of tokens) account for about 82% of the gap; a 70M attention model beats a 1.4B gated-convolution model on recall.",
+      "scope": "17 models, 70M-1.4B, Pile; 2023-era gated convolutions (predates Mamba-2 and DeltaNet)",
+      "sources": [
+        "arXiv:2312.04927 Arora+ 2023, Zoology"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [
+        [
+          "def.recall"
+        ]
+      ]
+    },
+    {
+      "id": "e.recall_state",
+      "type": "empirical_claim",
+      "statement": "Recall quality trades off against recurrent state size: fixed-state models (H3, Mamba, RWKV) struggle on recall-intensive tasks, and varying window size and feature dimension traces a recall-memory frontier.",
+      "scope": "1.3B models",
+      "sources": [
+        "arXiv:2402.18668 Arora+ 2024, Simple linear attention LMs balance the recall-throughput tradeoff (BASED)"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [
+        [
+          "def.recall",
+          "t.linear_attn_is_rnn"
+        ]
+      ]
+    },
+    {
+      "id": "e.hybrid_recovers",
+      "type": "empirical_claim",
+      "statement": "A little attention recovers most of the recall gap: input-dependent sparse-attention hybrids close 97.4% of the Pile perplexity gap, and a 125M H3+attention hybrid beats a Transformer by 1.0 perplexity on OpenWebText.",
+      "scope": "70M-360M (Zoology), 125M (H3)",
+      "sources": [
+        "arXiv:2312.04927 Arora+ 2023, Zoology",
+        "arXiv:2212.14052 Fu+ 2022, Hungry Hungry Hippos (H3)"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [
+        [
+          "e.recall_gap"
+        ]
+      ]
+    },
+    {
+      "id": "e.gla_parity",
+      "type": "empirical_claim",
+      "statement": "Gated linear attention nearly matches Transformer++: WikiText perplexity 28.65 vs 28.39 at 340M (15B tokens) and 17.22 vs 16.85 at 1.3B (100B tokens).",
+      "scope": "340M and 1.3B",
+      "sources": [
+        "arXiv:2312.06635 Yang+ 2023, Gated Linear Attention Transformers"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [
+        [
+          "t.linear_attn_is_rnn"
+        ]
+      ]
+    },
+    {
+      "id": "e.delta_rule",
+      "type": "empirical_claim",
+      "statement": "Delta-rule updates beat additive linear attention on WikiText-103 at about 40M and 90M parameters; pure linear models still underperform Transformers on in-context retrieval at 1.3B; gated delta rules outperform Mamba2 and DeltaNet.",
+      "scope": "about 40M-1.3B",
+      "sources": [
+        "arXiv:2102.11174 Schlag+ 2021, Linear Transformers Are Secretly Fast Weight Programmers",
+        "arXiv:2406.06484 Yang+ 2024, Parallelizing Linear Transformers with the Delta Rule",
+        "arXiv:2412.06464 Yang+ 2024, Gated Delta Networks"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [
+        [
+          "t.fast_weights"
+        ]
+      ]
+    },
+    {
+      "id": "e.ssm_lm",
+      "type": "empirical_claim",
+      "statement": "Selective state-space models match same-size Transformers on language modeling at billion scale; Mamba-2 trains 2-8x faster than Mamba while remaining competitive.",
+      "scope": "3B (Mamba), 8B (empirical study)",
+      "sources": [
+        "arXiv:2312.00752 Gu & Dao 2023, Mamba",
+        "arXiv:2405.21060 Dao & Gu 2024, Transformers are SSMs (Mamba-2)",
+        "arXiv:2406.07887 Waleffe+ 2024, An Empirical Study of Mamba-based Language Models"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.looped_match",
+      "type": "empirical_claim",
+      "statement": "A k-layer block looped L times nearly matches a kL-layer model on synthetic reasoning and is competitive on downstream reasoning; looped transformers fit in-context learning tasks with under 10% of the parameters.",
+      "scope": "synthetic tasks and LM reasoning; sizes not stated in abstracts",
+      "sources": [
+        "arXiv:2502.17416 Saunshi+ 2025, Reasoning with Latent Thoughts",
+        "arXiv:2311.12424 Yang+ 2023, Looped Transformers are Better at Learning Learning Algorithms"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [],
+      "notes": "Motivated by t.depth_bound; the evidence stands on its own experiments."
+    },
+    {
+      "id": "e.recursion_flops",
+      "type": "empirical_claim",
+      "statement": "A shared recursive block with learned per-token recursion depth (Mixture-of-Recursions) lowers validation perplexity at equal training FLOPs with fewer parameters.",
+      "scope": "135M-1.7B, compute-matched",
+      "sources": [
+        "arXiv:2507.10524 Bae+ 2025, Mixture-of-Recursions"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [],
+      "notes": "Motivated by t.uniform_compute."
+    },
+    {
+      "id": "e.adaptive_depth_lm",
+      "type": "empirical_claim",
+      "statement": "Learned adaptive computation (ACT) gives large gains on synthetic algorithmic tasks but small gains on character-level language modeling; adaptive per-layer looping mainly helps math reasoning, with gated memory recovering commonsense performance.",
+      "scope": "ACT: char-level LM; adaptive loops: 2026 workshop preprint",
+      "sources": [
+        "arXiv:1603.08983 Graves 2016, Adaptive Computation Time",
+        "arXiv:2603.08391 (2026), Adaptive Loops and Memory in Transformers (workshop preprint)"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [],
+      "notes": "Motivated by t.depth_bound."
+    },
+    {
+      "id": "e.mod",
+      "type": "empirical_claim",
+      "statement": "Routing a capacity-limited subset of tokens through each block (Mixture-of-Depths) matches baseline quality at equivalent training FLOPs and wall-clock, with faster steps at sampling.",
+      "scope": "sizes not stated in abstract",
+      "sources": [
+        "arXiv:2404.02258 Raposo+ 2024, Mixture-of-Depths"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [],
+      "notes": "Motivated by t.uniform_compute."
+    },
+    {
+      "id": "e.early_exit",
+      "type": "empirical_claim",
+      "statement": "Per-token early exit and self-speculative decoding cut inference compute (roughly 2-3x) while keeping quality.",
+      "scope": "inference-time savings on Llama-family models; not rewarded by this study's training-FLOP budget",
+      "sources": [
+        "arXiv:2207.07061 Schuster+ 2022, Confident Adaptive Language Modeling",
+        "arXiv:2404.16710 Elhoushi+ 2024, LayerSkip"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": [],
+      "notes": "Motivated by t.uniform_compute."
+    },
+    {
+      "id": "e.memory_tokens",
+      "type": "empirical_claim",
+      "statement": "Learnable memory tokens improve translation and language modeling; memory tokens passed between segments make a recurrent model on par with Transformer-XL; a 3.2M single-block UT with ACT reaches non-trivial Sudoku-Extreme accuracy only with memory tokens.",
+      "scope": "mixed; the Sudoku result is one task and one preprint",
+      "sources": [
+        "arXiv:2006.11527 Burtsev+ 2020, Memory Transformer",
+        "arXiv:2207.06881 Bulatov+ 2022, Recurrent Memory Transformer",
+        "arXiv:2604.21999 (2026), Universal Transformers Need Memory (single-author preprint)"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.residual_variants",
+      "type": "empirical_claim",
+      "statement": "Depth-weighted averaging of earlier block outputs (DenseFormer) improves perplexity with a few thousand extra parameters; multiple residual streams with learned connections (hyper-connections) report significant gains over residual connections; constraining them to a manifold restores the identity mapping.",
+      "scope": "author-reported; model sizes not stated in abstracts",
+      "sources": [
+        "arXiv:2402.02622 Pagliardini+ 2024, DenseFormer",
+        "arXiv:2409.19606 Zhu+ 2024, Hyper-Connections",
+        "arXiv:2512.24880 Xie+ 2025, mHC: Manifold-Constrained Hyper-Connections",
+        "arXiv:2603.14833 (2026), Ablate and Rescue: residual-stream hyper-connections"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.sharing",
+      "type": "empirical_claim",
+      "statement": "Immediate block-wise weight sharing improves accuracy at no parameter cost (+0.7% and +0.8% at 125M and 350M); cross-layer sharing cuts parameters substantially in BERT-scale encoders.",
+      "scope": "125M-350M decoders; BERT-scale encoders",
+      "sources": [
+        "arXiv:2402.14905 Liu+ 2024, MobileLLM",
+        "arXiv:1909.11942 Lan+ 2019, ALBERT",
+        "arXiv:2104.06022 Takase & Kiyono 2021, Lessons on Parameter Sharing across Layers"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.shape",
+      "type": "empirical_claim",
+      "statement": "Evidence on depth versus width conflicts: over a wide range shape matters little relative to parameter count (Kaplan); at fixed parameters deeper models generalize more compositionally (41M-374M); deep-and-thin is chosen at 125M-350M.",
+      "scope": "41M-1B+; nothing at 5-30M",
+      "sources": [
+        "arXiv:2001.08361 Kaplan+ 2020, Scaling Laws for Neural Language Models",
+        "arXiv:2310.19956 Petty+ 2023, Impact of Depth on Compositional Generalization",
+        "arXiv:2402.14905 Liu+ 2024, MobileLLM"
+      ],
+      "status": "disputed",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.tinystories",
+      "type": "empirical_claim",
+      "statement": "Models under 10M parameters trained on TinyStories produce coherent English.",
+      "scope": "TinyStories corpus",
+      "sources": [
+        "arXiv:2305.07759 Eldan & Li 2023, TinyStories"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.moe_granularity",
+      "type": "empirical_claim",
+      "statement": "Fine-grained experts beat feed-forward-sized experts across compute budgets, and the dense-versus-MoE efficiency gap widens with scale.",
+      "scope": "about 129M-3.7B on C4; no evidence at 5-30M",
+      "sources": [
+        "arXiv:2402.07871 Krajewski+ 2024, Scaling Laws for Fine-Grained MoE",
+        "arXiv:2101.03961 Fedus+ 2021, Switch Transformers"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.glu",
+      "type": "empirical_claim",
+      "statement": "GLU-family feed-forward layers (SwiGLU, GEGLU) improve over ReLU and GELU feed-forward layers.",
+      "scope": "T5-style models",
+      "sources": [
+        "arXiv:2002.05202 Shazeer 2020, GLU Variants Improve Transformer"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.prenorm",
+      "type": "empirical_claim",
+      "statement": "Pre-norm removes the learning-rate warmup that post-norm needs; RMSNorm matches LayerNorm and is cheaper.",
+      "scope": "translation and pretraining experiments",
+      "sources": [
+        "arXiv:2002.04745 Xiong+ 2020, On Layer Normalization in the Transformer Architecture",
+        "arXiv:1910.07467 Zhang & Sennrich 2019, RMSNorm"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.instability",
+      "type": "empirical_claim",
+      "statement": "Large-scale instabilities (attention-logit growth, output-logit divergence) reproduce in small models at high learning rates, and QK-normalization and z-loss mitigate them.",
+      "scope": "small models",
+      "sources": [
+        "arXiv:2309.14322 Wortsman+ 2023, Small-scale proxies for training instabilities",
+        "arXiv:2010.04245 Henry+ 2020, Query-Key Normalization"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.position",
+      "type": "empirical_claim",
+      "statement": "Causal LMs without positional encoding remain competitive and learn position implicitly; no positional encoding length-generalizes better than RoPE or ALiBi on downstream reasoning; ALiBi extrapolates beyond its training length.",
+      "scope": "various; ALiBi at 1.3B",
+      "sources": [
+        "arXiv:2203.16634 Haviv+ 2022, Transformer LMs without Positional Encodings",
+        "arXiv:2305.19466 Kazemnejad+ 2023, Positional Encoding and Length Generalization",
+        "arXiv:2108.12409 Press+ 2021, ALiBi"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.tied_small",
+      "type": "empirical_claim",
+      "statement": "At small scale embeddings are a large share of parameters (18% of the 5.9M baseline at vocabulary 4096), and tying is standard in small-model recipes.",
+      "scope": "this harness; 125M-350M recipes",
+      "sources": [
+        "cspace profile on this harness (measured, Nov 2026)",
+        "arXiv:2402.14905 Liu+ 2024, MobileLLM",
+        "arXiv:1608.05859 Press & Wolf 2016, Using the Output Embedding"
+      ],
+      "status": "supported",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "e.proxy_limits",
+      "type": "empirical_claim",
+      "statement": "Average perplexity can hide recall deficits, and simple synthetic recall tests can miss language-model behavior; MAD's synthetic tasks are reported to predict compute-optimal perplexity.",
+      "scope": "70M-7B (MAD)",
+      "sources": [
+        "arXiv:2312.04927 Arora+ 2023, Zoology",
+        "arXiv:2403.17844 Poli+ 2024, Mechanistic Design and Scaling of Hybrid Architectures (MAD)"
+      ],
+      "status": "disputed",
+      "active": false,
+      "supports": []
+    },
+    {
+      "id": "alt.ut",
+      "type": "method",
+      "statement": "Universal Transformer: one shared block applied recurrently over depth with per-position dynamic halting.",
+      "scope": "algorithmic tasks, LAMBADA, WMT",
+      "sources": [
+        "arXiv:1807.03819 Dehghani+ 2018, Universal Transformers",
+        "arXiv:1603.08983 Graves 2016, Adaptive Computation Time"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.adaptive_depth_lm"
+        ]
+      ],
+      "notes": "Motivated by t.depth_bound."
+    },
+    {
+      "id": "alt.pondernet",
+      "type": "method",
+      "statement": "PonderNet: probabilistic halting that learns the number of steps end to end.",
+      "scope": "synthetic tasks, QA",
+      "sources": [
+        "arXiv:2107.05407 Banino+ 2021, PonderNet"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.adaptive_depth_lm"
+        ]
+      ]
+    },
+    {
+      "id": "alt.recurrent_depth",
+      "type": "method",
+      "statement": "Recurrent-depth LM: prelude, a core block iterated a variable number of times, and coda; test-time compute scales in latent space.",
+      "scope": "3.5B",
+      "sources": [
+        "arXiv:2502.05171 Geiping+ 2025, Recurrent Depth Approach",
+        "arXiv:2502.17416 Saunshi+ 2025, Reasoning with Latent Thoughts",
+        "arXiv:2301.13196 Giannou+ 2023, Looped Transformers as Programmable Computers"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.looped_match"
+        ]
+      ]
+    },
+    {
+      "id": "alt.mor",
+      "type": "method",
+      "statement": "Mixture-of-Recursions: shared recursive block with per-token routing to different recursion depths.",
+      "scope": "135M-1.7B",
+      "sources": [
+        "arXiv:2507.10524 Bae+ 2025, Mixture-of-Recursions",
+        "arXiv:2410.20672 Bae+ 2024, Relaxed Recursive Transformers"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.recursion_flops"
+        ]
+      ]
+    },
+    {
+      "id": "alt.mod",
+      "type": "method",
+      "statement": "Mixture-of-Depths: a router sends only top-k tokens through each block; others skip it on the residual stream.",
+      "scope": "see e.mod",
+      "sources": [
+        "arXiv:2404.02258 Raposo+ 2024, Mixture-of-Depths"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.mod"
+        ]
+      ]
+    },
+    {
+      "id": "alt.early_exit",
+      "type": "method",
+      "statement": "Early exit: tokens stop at an intermediate layer once confident.",
+      "scope": "inference",
+      "sources": [
+        "arXiv:2207.07061 Schuster+ 2022, Confident Adaptive Language Modeling",
+        "arXiv:2404.16710 Elhoushi+ 2024, LayerSkip"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.early_exit"
+        ]
+      ]
+    },
+    {
+      "id": "alt.linear_attention",
+      "type": "method",
+      "statement": "Linear or gated linear attention: a fixed-size matrix state replaces the KV history; log-linear variants grow the state logarithmically.",
+      "scope": "see e.gla_parity",
+      "sources": [
+        "arXiv:2006.16236 Katharopoulos+ 2020, Transformers are RNNs",
+        "arXiv:2312.06635 Yang+ 2023, Gated Linear Attention Transformers",
+        "arXiv:2506.04761 Log-Linear Attention (2025)"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "t.linear_attn_is_rnn",
+          "e.gla_parity"
+        ]
+      ]
+    },
+    {
+      "id": "alt.delta_rule",
+      "type": "method",
+      "statement": "Delta-rule state updates (DeltaNet, Gated DeltaNet, RWKV-7): the state is corrected toward new key-value pairs instead of summed.",
+      "scope": "see e.delta_rule",
+      "sources": [
+        "arXiv:2406.06484 Yang+ 2024, Parallelizing Linear Transformers with the Delta Rule",
+        "arXiv:2412.06464 Yang+ 2024, Gated Delta Networks",
+        "arXiv:2503.14456 Peng+ 2025, RWKV-7 Goose"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "t.fast_weights",
+          "e.delta_rule"
+        ]
+      ]
+    },
+    {
+      "id": "alt.ssm",
+      "type": "method",
+      "statement": "State-space sequence mixing (S4, Mamba, Mamba-2): input-dependent linear recurrence with a fixed-size state.",
+      "scope": "see e.ssm_lm",
+      "sources": [
+        "arXiv:2111.00396 Gu+ 2021, Structured State Spaces (S4)",
+        "arXiv:2312.00752 Gu & Dao 2023, Mamba",
+        "arXiv:2405.21060 Dao & Gu 2024, Transformers are SSMs (Mamba-2)"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.ssm_lm"
+        ]
+      ]
+    },
+    {
+      "id": "alt.retention",
+      "type": "method",
+      "statement": "Retention and RWKV-style recurrences with parallel training and recurrent inference.",
+      "scope": "language modeling up to 14B",
+      "sources": [
+        "arXiv:2307.08621 Sun+ 2023, Retentive Network",
+        "arXiv:2305.13048 Peng+ 2023, RWKV"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "t.linear_attn_is_rnn"
+        ]
+      ]
+    },
+    {
+      "id": "alt.local_hybrid",
+      "type": "method",
+      "statement": "Local (sliding-window) attention combined with a recurrent or linear-attention layer (Griffin, Samba, BASED, Jamba).",
+      "scope": "125M-14B",
+      "sources": [
+        "arXiv:2004.05150 Beltagy+ 2020, Longformer",
+        "arXiv:2402.19427 De+ 2024, Griffin",
+        "arXiv:2406.07522 Ren+ 2024, Samba",
+        "arXiv:2402.18668 Arora+ 2024, Simple linear attention LMs balance the recall-throughput tradeoff (BASED)",
+        "arXiv:2403.19887 Lieber+ 2024, Jamba"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.hybrid_recovers",
+          "e.recall_state"
+        ]
+      ]
+    },
+    {
+      "id": "alt.memory_tokens",
+      "type": "method",
+      "statement": "Memory or register tokens: extra latent positions that read and write global state.",
+      "scope": "see e.memory_tokens",
+      "sources": [
+        "arXiv:2006.11527 Burtsev+ 2020, Memory Transformer",
+        "arXiv:2207.06881 Bulatov+ 2022, Recurrent Memory Transformer",
+        "arXiv:2309.16588 Darcet+ 2023, Vision Transformers Need Registers"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.memory_tokens"
+        ]
+      ]
+    },
+    {
+      "id": "alt.multi_stream",
+      "type": "method",
+      "statement": "Hyper-connections: several residual streams with learned depth and width connections.",
+      "scope": "see e.residual_variants",
+      "sources": [
+        "arXiv:2409.19606 Zhu+ 2024, Hyper-Connections",
+        "arXiv:2512.24880 Xie+ 2025, mHC: Manifold-Constrained Hyper-Connections"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.residual_variants"
+        ]
+      ]
+    },
+    {
+      "id": "alt.depth_mixing",
+      "type": "method",
+      "statement": "Learned access to earlier layers: depth-weighted averaging (DenseFormer) or gated highway paths.",
+      "scope": "see e.residual_variants",
+      "sources": [
+        "arXiv:2402.02622 Pagliardini+ 2024, DenseFormer",
+        "arXiv:1505.00387 Srivastava+ 2015, Highway Networks"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.residual_variants"
+        ]
+      ]
+    },
+    {
+      "id": "alt.layer_sharing",
+      "type": "method",
+      "statement": "Cross-layer or block-wise weight sharing.",
+      "scope": "see e.sharing",
+      "sources": [
+        "arXiv:1909.11942 Lan+ 2019, ALBERT",
+        "arXiv:2402.14905 Liu+ 2024, MobileLLM",
+        "arXiv:2104.06022 Takase & Kiyono 2021, Lessons on Parameter Sharing across Layers"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.sharing"
+        ]
+      ]
+    },
+    {
+      "id": "alt.moe",
+      "type": "method",
+      "statement": "Sparse mixture-of-experts feed-forward layers with learned routing.",
+      "scope": "see e.moe_granularity",
+      "sources": [
+        "arXiv:1701.06538 Shazeer+ 2017, Sparsely-Gated Mixture-of-Experts",
+        "arXiv:2101.03961 Fedus+ 2021, Switch Transformers",
+        "arXiv:2409.02060 Muennighoff+ 2024, OLMoE"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.moe_granularity"
+        ]
+      ]
+    },
+    {
+      "id": "alt.position",
+      "type": "method",
+      "statement": "ALiBi distance biases or no positional encoding (NoPE).",
+      "scope": "see e.position",
+      "sources": [
+        "arXiv:2108.12409 Press+ 2021, ALiBi",
+        "arXiv:2203.16634 Haviv+ 2022, Transformer LMs without Positional Encodings"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.position"
+        ]
+      ]
+    },
+    {
+      "id": "alt.qk_norm",
+      "type": "method",
+      "statement": "QK-normalization (and z-loss) for attention-logit stability.",
+      "scope": "see e.instability",
+      "sources": [
+        "arXiv:2010.04245 Henry+ 2020, Query-Key Normalization",
+        "arXiv:2309.14322 Wortsman+ 2023, Small-scale proxies for training instabilities"
+      ],
+      "status": "established",
+      "active": false,
+      "supports": [
+        [
+          "e.instability"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.tmp
+
+# Generated data and experiment state (large / machine-specific)
+data/
+archive/
+runs/
+
+# Secrets
+.env

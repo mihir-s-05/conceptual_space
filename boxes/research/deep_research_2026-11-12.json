@@ -1,0 +1,401 @@
+{
+ "question": "Literature search to ground a K/C dependency box for small causal language-model architectures (roughly 5-30M parameters, trained on TinyStories or FineWeb-Edu). Goal: for each design commitment of a Llama-style decoder, find (a) the original source introducing it, (b) the established alternatives that change or drop that commitment, and (c) empirical claims about how the alternatives compare, ideally at small scale, with paper citations (arXiv IDs). Commitments to cover: 1) fixed computation depth per token (alternatives: Universal Transformers, adaptive computation time/PonderNet, recurrent-depth / looped transformers, Mixture-of-Depths, early exit); 2) softmax attention over the full KV history as the sequence memory (alternatives: linear attention, state-space models such as S4/Mamba/Mamba-2, RWKV, RetNet, gated linear attention/DeltaNet, sliding-window and hybrid attention-SSM models, memory tokens / recurrent memory transformers; recall findings from Zoology/MAD); 3) a single additive residual stream (alternatives: hyper-connections, DenseFormer, multi-stream or highway designs); 4) unshared parameters per layer (alternatives: ALBERT-style sharing, MobileLLM layer sharing); 5) dense FFN (alternatives: Mixture of Experts at small scale); 6) RoPE position encoding (alternatives: ALiBi, NoPE); 7) pre-norm RMSNorm and SwiGLU (alternatives and stability evidence, QK-norm); 8) tied embeddings at small scale (MobileLLM, SmolLM). Also: small-scale architecture-screening methodology (MAD synthetic tasks, Zoology associative recall, TinyStories findings on depth/width) and known pitfalls of small-scale proxies.",
+ "summary": "The verified literature gives solid grounding for only part of the K/C box. Strongest are the sequence-memory findings: fixed-state sub-quadratic models (gated convolutions, linear attention) trail softmax attention mainly because of associative recall (Zoology, 2312.04927), and sparse-attention hybrids close most of that gap. Adaptive depth, memory tokens, residual-stream variants (Hyper-Connections, DenseFormer), layer sharing (ALBERT, MobileLLM-LS), and fine-grained MoE each have a primary source with author-reported gains. Almost all of that evidence is at 100M-1.7B parameters, not 5-30M, so it is hypothesis-generating rather than confirmatory for the target regime. Nothing was verified on RoPE/ALiBi/NoPE, RMSNorm/SwiGLU, tied embeddings, or early exit/Mixture-of-Depths, and MAD's predictive validity at small scale is unconfirmed. Small-scale proxies can reproduce training instabilities (Wortsman 2309.14322), which supports using small runs for stability screening.",
+ "findings": [
+  {
+   "claim": "Commitment 1 (fixed depth per token): adaptive looping and Mixture-of-Recursions are the verified alternatives. Adaptive per-layer looping mainly helps math reasoning, and gated memory banks recover commonsense performance. Combined, they beat an iso-FLOP baseline with 3x the layers on math benchmarks (2-1 vote). MoR reports lower validation perplexity and better few-shot accuracy at equal training FLOPs and smaller model size, but only at 135M-1.7B parameters.",
+   "confidence": "medium",
+   "sources": [
+    "arXiv:2603.08391",
+    "arXiv:2507.10524"
+   ],
+   "evidence": "Frey et al. (ICLR 2026 workshop paper) and Bae et al. state these results in their abstracts. Both are self-reported and not independently replicated. MoR's smallest scale (135M) is above the 5-30M target, so neither paper gives direct small-scale evidence."
+  },
+  {
+   "claim": "Commitment 1, memory tokens in a Universal Transformer: on a single-block UT with ACT (about 3.2M parameters) trained on Sudoku-Extreme, no configuration without memory tokens reaches non-trivial performance. The paper reports 57.4% +/- 0.7% exact match at T=8-32 memory tokens. This is a single task and single architecture, and the paper notes TRM and HRM solve Sudoku without memory tokens. The related claim that memory tokens substitute for ponder depth was refuted (1-2).",
+   "confidence": "medium",
+   "sources": [
+    "arXiv:2604.21999"
+   ],
+   "evidence": "Abstract of Sapunov (Apr 2026). It is a single-author preprint with no replication, but it is one of the few results in the target parameter range. The 3.2M parameter count was not confirmed on the abstract page."
+  },
+  {
+   "claim": "Commitment 2 (softmax KV memory): fixed-state sub-quadratic models lag attention mainly on associative recall. In Zoology, gated-convolution models (Hyena, H3, RWKV-style) trail attention by up to 2.1 perplexity points on the Pile across 17 models at 70M-1.4B. A 70M attention model beats a 1.4B gated-convolution model on associative recall. AR-hit tokens are 6.4% of Pile tokens but account for about 82% of the perplexity gap.",
+   "confidence": "high",
+   "sources": [
+    "arXiv:2312.04927",
+    "https://proceedings.iclr.cc/paper_files/paper/2024/file/448fc91f669c15d10364ee01d512cc10-Paper-Conference.pdf",
+    "https://hazyresearch.stanford.edu/blog/2023-12-11-zoology0-intro"
+   ],
+   "evidence": "The claim has several 3-0 votes across the arXiv paper, the ICLR version and the authors' blog. The result is peer-reviewed and consistent across sources. It is scoped to 2023-era gated-convolution models, not Mamba-2 or DeltaNet, and the 82% is an average attribution."
+  },
+  {
+   "claim": "Commitment 2, hybrids and recall remedies: hybrids of a gated-convolution backbone with input-dependent sparse attention close 97.4% of the gap to full attention while staying sub-quadratic (2-1 vote). This is a Pile-perplexity result at roughly 70M-360M parameters.",
+   "confidence": "medium",
+   "sources": [
+    "arXiv:2312.04927"
+   ],
+   "evidence": "The ICLR 2024 paper abstract gives the 97.4% figure. One verifier dissented, and the repeated-bigram detail in the claim could not be checked."
+  },
+  {
+   "claim": "Commitment 2, linear-attention and recurrent alternatives: GLA performs competitively with Transformer++ (LLaMA architecture), RetNet and Mamba at 340M and 1.3B parameters, with higher throughput than Mamba. Log-linear attention replaces the fixed-size state with a logarithmically growing set of states. RWKV-7 generalizes the delta rule with vector-valued gating and in-context learning rates, runs in constant memory and constant time per token, and claims state tracking and recognition of all regular languages. That last point is an expressivity result, not a small-scale comparison.",
+   "confidence": "medium",
+   "sources": [
+    "arXiv:2312.06635",
+    "arXiv:2506.04761",
+    "arXiv:2503.14456"
+   ],
+   "evidence": "All are primary and self-reported at 340M or larger, or theoretical. The refuted claims include a generic linear-attention-underperforms-softmax claim (1-2) and a claim about log-linear MQAR results (0-3), so neither should be cited. Expressivity does not show that a fixed state can replace KV history for recall."
+  },
+  {
+   "claim": "Commitment 3 (single additive residual stream): DenseFormer improves perplexity without increasing model size, and Hyper-Connections is proposed as a residual alternative that learns the strength of connections between features at different depths. The authors report significant gains over residual connections in dense and sparse LLM pretraining. An ablate-and-rescue analysis separates functional redundancy from asymmetric utilization across hyper-connection streams. YOCO++ gives only weak adjacent evidence, since it compares KV residuals, not residual-stream variants.",
+   "confidence": "medium",
+   "sources": [
+    "arXiv:2402.02622",
+    "arXiv:2409.19606",
+    "arXiv:2603.14833",
+    "arXiv:2604.13556"
+   ],
+   "evidence": "The DenseFormer (NeurIPS 2024) and Hyper-Connections (ICLR 2025) claims were verified at 3-0, but both are author-reported with no model scale on the abstract page. Refuted claims: the DenseFormer mechanism wording (1-2) and the xHC outperforms mHC claim (0-3). YOCO++ validation loss was 2.4194 vs 2.4266 for a 1.1B-class Transformer baseline, a small margin."
+  },
+  {
+   "claim": "Commitment 4 (unshared per-layer parameters): MobileLLM block-wise (immediate) weight sharing adds no parameters and only marginal latency, and gives gains of about 0.7% and 0.8% over MobileLLM 125M and 350M. ALBERT is the origin of cross-layer sharing, and its authors claim the parameter-reduction methods scale much better than BERT (2-1 vote). MobileLLM's thesis that deep-and-thin architecture matters most under 1B parameters was refuted as a verified claim (1-2).",
+   "confidence": "medium",
+   "sources": [
+    "arXiv:2402.14905",
+    "arXiv:1909.11942"
+   ],
+   "evidence": "Both are primary abstracts. The MobileLLM gains are small and likely from single runs. Sharing doubles the executed depth and FLOPs, and ALBERT-xxlarge is about 3x slower than BERT-large. Neither paper tests the 5-30M regime. The claim that ALBERT's abstract names the sharing technique was refuted (0-3) on a technicality about the abstract text."
+  },
+  {
+   "claim": "Commitment 5 (dense FFN): fine-grained MoE scaling laws show that granularity G=1, with expert size equal to the FFN, is suboptimal across a broad range of FLOPs. The experiments cover roughly 129M-3.7B parameters on C4. They therefore do not show that MoE helps at 5-30M.",
+   "confidence": "medium",
+   "sources": [
+    "arXiv:2402.07871"
+   ],
+   "evidence": "The Krajewski et al. (ICML 2024) quote was verified at 3-0. A second phrasing about whether a small dense FFN should be replaced by an MoE was refuted (1-2) as overreach. The gain ignores memory, communication and routing overhead."
+  },
+  {
+   "claim": "Small-scale screening methodology: the MAD-lab README asserts that MAD rankings accurately indicate compute-optimal perplexity of language models at scale. This is a first-party, falsifiable validity claim. Two stronger forms were refuted: that MAD correlates with compute-optimal perplexity so synthetic proxies can rank architectures (1-2), and that MAD is meant to replace expensive scaled-up runs (0-3). Zoology's MQAR and AR-hit analysis is the better-supported screening tool.",
+   "confidence": "medium",
+   "sources": [
+    "https://github.com/athms/mad-lab",
+    "arXiv:2403.17844",
+    "arXiv:2312.04927"
+   ],
+   "evidence": "The README quote was verified at 3-0 only as a statement of what the authors assert. The PDF of the MAD paper was unreadable to verifiers, and the scaling correlation rests on a limited set of architectures. Treat it as a hypothesis to test at 5-30M."
+  },
+  {
+   "claim": "Pitfalls of small-scale proxies: training instabilities seen at scale (attention logit growth, and output logits diverging from log probabilities) also appear in small models at high learning rates. QK-layernorm and z-loss mitigations work equally well in that regime, so small runs can be used to study stability. This supports QK-norm as a stability intervention. Separately, average perplexity can hide recall deficits, since 6.4% of tokens drive 82% of the gap.",
+   "confidence": "high",
+   "sources": [
+    "arXiv:2309.14322",
+    "arXiv:2312.04927"
+   ],
+   "evidence": "The Wortsman et al. (ICLR 2024) claim was verified at 3-0 and the models span roughly 1M to a few hundred M parameters. The mitigation-equivalence detail comes from verifier recall of the abstract, not from a claim that was directly voted on."
+  }
+ ],
+ "caveats": "The coverage gaps matter most. No claim survived verification for early exit, Mixture-of-Depths, PonderNet, Mamba/Mamba-2, RetNet, DeltaNet, sliding-window hybrids, RoPE/ALiBi/NoPE, RMSNorm/SwiGLU, tied embeddings (SmolLM), or TinyStories depth/width findings. Those rows of the box still need sources. Nearly every verified result is at 70M-1.7B, not 5-30M, and is self-reported by the method's authors. Several verifiers worked from memory and did not search for contradicting or replicating work. The Zoology gap figures predate Mamba-2 and DeltaNet. Some papers are 2026 preprints or workshop papers without peer review (2603.08391, 2604.21999, 2603.14833, 2604.13556). Nine claims were refuted, mostly for overreach in wording, not because the underlying papers are wrong. The refutations do not support the opposite conclusions either.",
+ "openQuestions": [
+  "Do the depth-recurrence, memory-token, layer-sharing and hyper-connection gains hold at 5-30M parameters on TinyStories or FineWeb-Edu, and at matched FLOPs, not just matched parameters?",
+  "Does MAD or MQAR performance at tiny scale predict real-LM perplexity and recall rankings at 5-30M, or do the proxies break down there?",
+  "What do the current recall results look like for Mamba-2, Gated DeltaNet and RWKV-7 against softmax attention, and does a small sliding-window or sparse-attention hybrid recover most of the gap at 5-30M?",
+  "What is the evidence for the unverified commitments: RoPE vs ALiBi vs NoPE, RMSNorm/SwiGLU and QK-norm ablations, tied embeddings (MobileLLM, SmolLM), and TinyStories depth/width findings?"
+ ],
+ "refuted": [
+  {
+   "claim": "Memory tokens and ponder depth act as substitutes: mean halt steps fall monotonically as memory size grows (11.60 at T=8 to 8.25 at T=64) while exact-match stays roughly flat under lambda warmup (57.09% to 54.91%).",
+   "vote": "1-2",
+   "source": "https://arxiv.org/pdf/2604.21999"
+  },
+  {
+   "claim": "Linear attention generally underperforms ordinary softmax attention; GLA is proposed as the gated variant that closes this gap while keeping linear-time inference.",
+   "vote": "1-2",
+   "source": "https://arxiv.org/pdf/2312.06635"
+  },
+  {
+   "claim": "On the MQAR synthetic associative-recall task, log-linear variants (Mamba-2, Gated DeltaNet) perform well even against strong linear baselines, and softmax attention is near-perfect across settings, so the paper claims a recall gain over linear models but not parity with softmax.",
+   "vote": "0-3",
+   "source": "https://arxiv.org/html/2506.04761v2"
+  },
+  {
+   "claim": "Performance on small synthetic MAD tasks (such as compression and recall) correlates with compute-optimal perplexity, so cheap synthetic proxies can rank new architectures. Only the abstract page was readable; the PDF fetch returned raw binary, so this rests on the abstract summary.",
+   "vote": "1-2",
+   "source": "https://arxiv.org/pdf/2403.17844"
+  },
+  {
+   "claim": "MAD is positioned as a cheap proxy for predicting how candidate sequence-model architectures will perform at scale. It is meant to replace expensive scaled-up runs during architecture screening.",
+   "vote": "0-3",
+   "source": "https://github.com/athms/mad-lab"
+  },
+  {
+   "claim": "The mechanism is an extra averaging step after every block, computing a learned weighted average of current and past block representations (Depth-Weighted-Average), rather than changing the residual stream itself.",
+   "vote": "1-2",
+   "source": "https://arxiv.org/abs/2402.02622"
+  },
+  {
+   "claim": "xHC (N=16, k=4) outperforms both mHC and the vanilla residual baseline in language-model pre-training. This bears on commitment 3 (single additive residual stream), but the page gives no model size or dataset, so it does not speak to the 5-30M regime.",
+   "vote": "0-3",
+   "source": "https://neurips.cc/virtual/2026/poster/153922"
+  },
+  {
+   "claim": "The paper's core thesis is that architecture (deep and thin layers) matters most for language models under one billion parameters, which supports a depth-over-width prior at small scale. The page does not itself compare depth against width experimentally. Bears on commitment 1 and the small-scale depth/width question.",
+   "vote": "1-2",
+   "source": "https://arxiv.org/abs/2402.14905"
+  },
+  {
+   "claim": "ALBERT's stated contribution is two parameter-reduction techniques that lower memory consumption and increase BERT's training speed. The abstract does not name the techniques here, so cross-layer sharing is not confirmed from this source.",
+   "vote": "0-3",
+   "source": "https://arxiv.org/pdf/1909.11942"
+  },
+  {
+   "claim": "Setting expert size equal to the feed-forward layer size is not optimal at almost any computational budget, which bears directly on whether a small dense FFN should be replaced by an MoE.",
+   "vote": "1-2",
+   "source": "https://arxiv.org/html/2402.07871v1"
+  }
+ ],
+ "unverified": [],
+ "sources": [
+  {
+   "url": "https://arxiv.org/pdf/2602.08864",
+   "quality": "unreliable",
+   "angle": "Adaptive depth",
+   "claimCount": 0
+  },
+  {
+   "url": "https://arxiv.org/pdf/2603.08391",
+   "quality": "primary",
+   "angle": "Adaptive depth",
+   "claimCount": 3
+  },
+  {
+   "url": "https://arxiv.org/pdf/2604.21999",
+   "quality": "primary",
+   "angle": "Adaptive depth",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.preprints.org/frontend/manuscript/07176648ad0d1a09ab839b7c90c888b1/download_pub",
+   "quality": "unreliable",
+   "angle": "Adaptive depth",
+   "claimCount": 0
+  },
+  {
+   "url": "https://arxiv.org/abs/2507.10524",
+   "quality": "primary",
+   "angle": "Adaptive depth",
+   "claimCount": 5
+  },
+  {
+   "url": "https://aman.ai/primers/ai/recursive-transformers/",
+   "quality": "secondary",
+   "angle": "Adaptive depth",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/pdf/2412.06464",
+   "quality": "unreliable",
+   "angle": "Sequence memory alternatives",
+   "claimCount": 0
+  },
+  {
+   "url": "https://arxiv.org/pdf/2312.06635",
+   "quality": "primary",
+   "angle": "Sequence memory alternatives",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/html/2506.04761v2",
+   "quality": "primary",
+   "angle": "Sequence memory alternatives",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/pdf/2507.06457",
+   "quality": "unreliable",
+   "angle": "Sequence memory alternatives",
+   "claimCount": 0
+  },
+  {
+   "url": "https://arxiv.org/pdf/2503.14456",
+   "quality": "primary",
+   "angle": "Sequence memory alternatives",
+   "claimCount": 3
+  },
+  {
+   "url": "https://arxiv.org/pdf/2312.04927",
+   "quality": "primary",
+   "angle": "Recall limits and hybrids",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/pdf/2403.17844",
+   "quality": "primary",
+   "angle": "Recall limits and hybrids",
+   "claimCount": 2
+  },
+  {
+   "url": "https://github.com/athms/mad-lab",
+   "quality": "primary",
+   "angle": "Recall limits and hybrids",
+   "claimCount": 4
+  },
+  {
+   "url": "https://par.nsf.gov/servlets/purl/10494110",
+   "quality": "unreliable",
+   "angle": "Recall limits and hybrids",
+   "claimCount": 0
+  },
+  {
+   "url": "https://proceedings.iclr.cc/paper_files/paper/2024/file/448fc91f669c15d10364ee01d512cc10-Paper-Conference.pdf",
+   "quality": "primary",
+   "angle": "Recall limits and hybrids",
+   "claimCount": 5
+  },
+  {
+   "url": "https://hazyresearch.stanford.edu/blog/2023-12-11-zoology0-intro",
+   "quality": "primary",
+   "angle": "Recall limits and hybrids",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/abs/2603.14833",
+   "quality": "primary",
+   "angle": "Residual stream variants",
+   "claimCount": 5
+  },
+  {
+   "url": "https://www.sebastianraschka.com/llm-architecture-gallery/mhc/",
+   "quality": "blog",
+   "angle": "Residual stream variants",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/abs/2402.02622",
+   "quality": "primary",
+   "angle": "Residual stream variants",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/abs/2409.19606",
+   "quality": "primary",
+   "angle": "Residual stream variants",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/pdf/2604.13556",
+   "quality": "primary",
+   "angle": "Residual stream variants",
+   "claimCount": 5
+  },
+  {
+   "url": "https://neurips.cc/virtual/2026/poster/153922",
+   "quality": "primary",
+   "angle": "Residual stream variants",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/abs/2402.14905",
+   "quality": "primary",
+   "angle": "Parameter sharing and tying",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/pdf/1909.11942",
+   "quality": "primary",
+   "angle": "Parameter sharing and tying",
+   "claimCount": 3
+  },
+  {
+   "url": "https://arxiv.org/html/2402.07871v1",
+   "quality": "primary",
+   "angle": "Small-scale MoE",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/pdf/2410.07524",
+   "quality": "unreliable",
+   "angle": "Small-scale MoE",
+   "claimCount": 0
+  },
+  {
+   "url": "https://arxiv.org/pdf/2503.05139",
+   "quality": "primary",
+   "angle": "Small-scale MoE",
+   "claimCount": 3
+  },
+  {
+   "url": "https://arxiv.org/pdf/2604.09175",
+   "quality": "primary",
+   "angle": "Small-scale MoE",
+   "claimCount": 3
+  },
+  {
+   "url": "https://www.vincirufus.com/en/posts/dense-models-vs-mixture-of-experts/",
+   "quality": "blog",
+   "angle": "Small-scale MoE",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/abs/2309.14322",
+   "quality": "primary",
+   "angle": "Position, norm and activation",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/abs/2002.05202",
+   "quality": "primary",
+   "angle": "Position, norm and activation",
+   "claimCount": 2
+  },
+  {
+   "url": "https://arxiv.org/abs/1910.07467",
+   "quality": "primary",
+   "angle": "Position, norm and activation",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/abs/2302.05442",
+   "quality": "primary",
+   "angle": "Position, norm and activation",
+   "claimCount": 2
+  },
+  {
+   "url": "https://arxiv.org/abs/2305.19466",
+   "quality": "primary",
+   "angle": "Position, norm and activation",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/pdf/2305.07759",
+   "quality": "primary",
+   "angle": "Small-scale screening pitfalls",
+   "claimCount": 4
+  },
+  {
+   "url": "https://arxiv.org/abs/2605.20798",
+   "quality": "primary",
+   "angle": "Small-scale screening pitfalls",
+   "claimCount": 5
+  },
+  {
+   "url": "https://arxiv.org/abs/2512.24503",
+   "quality": "primary",
+   "angle": "Small-scale screening pitfalls",
+   "claimCount": 4
+  }
+ ],
+ "stats": {
+  "angles": 8,
+  "sourcesFetched": 38,
+  "claimsExtracted": 129,
+  "claimsVerified": 40,
+  "confirmed": 30,
+  "killed": 10,
+  "unverified": 0,
+  "afterSynthesis": 10,
+  "urlDupes": 0,
+  "budgetDropped": 5,
+  "agentCalls": 168
+ }
+}

@@ -1,0 +1,1605 @@
+{
+ "topics": [
+  {
+   "key": "act-ut",
+   "topic": "Fixed depth per token vs adaptive computation: Adaptive Computation Time, Universal Transformers, PonderNet",
+   "papers": [
+    {
+     "arxiv_id": "1603.08983",
+     "title_on_page": "Adaptive Computation Time for Recurrent Neural Networks",
+     "id_matches_title": true,
+     "first_author_on_page": "Alex Graves",
+     "year": 2016,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "ACT lets recurrent networks learn how many computational steps to take per input, with minimal architecture changes and deterministic, differentiable behavior.",
+       "supported": true,
+       "scale": "Four synthetic tasks (parity, binary logic, integer addition, sorting) plus char-level LM on Hutter Prize Wikipedia; model sizes not on abstract page",
+       "note": "Confirmed via summary of abstract; exact quote string not verified verbatim (fetch tool paraphrased)."
+      },
+      {
+       "claim": "On synthetic tasks ACT dramatically improves performance, but on char-level LM the gains are small.",
+       "supported": true,
+       "scale": "Synthetic tasks and Hutter Prize Wikipedia char-LM; no parameter counts verified",
+       "note": "Abstract says substantial improvement on synthetic tasks and small gains on char-LM. The quoted wording 'dramatically improved' and 'does not yield large gains' was not verified verbatim; the second quote may be a stitched paraphrase."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "1807.03819",
+     "title_on_page": "Universal Transformers",
+     "id_matches_title": true,
+     "first_author_on_page": "Mostafa Dehghani",
+     "year": 2018,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "UT is a parallel-in-time self-attentive recurrent model with per-position dynamic halting, generalizing the Transformer and improving accuracy on several tasks.",
+       "supported": true,
+       "scale": "Algorithmic tasks, LAMBADA (new SOTA), WMT14 En-De (+0.9 BLEU over Transformer); parameter counts not on abstract page",
+       "note": "Supported. Page also reports SOTA on LAMBADA, which the claim omits."
+      },
+      {
+       "claim": "The model is argued Turing-complete under certain assumptions, unlike the standard Transformer, and addresses failure to generalize to longer lengths.",
+       "supported": true,
+       "scale": "Theoretical argument plus algorithmic task experiments",
+       "note": "Turing-completeness under certain assumptions is on the page. The 'unlike standard Transformer' and length-generalization framing were not seen in the fetched summary; likely in the full abstract/paper but unverified here. Quote wording 'the authors argue' is not a verbatim abstract phrase."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2107.05407",
+     "title_on_page": "PonderNet: Learning to Ponder",
+     "id_matches_title": true,
+     "first_author_on_page": "Andrea Banino",
+     "year": 2021,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "PonderNet learns the number of computational steps end-to-end, dramatically improving over previous adaptive computation methods on a synthetic problem and succeeding at extrapolation where traditional networks fail.",
+       "supported": true,
+       "scale": "Complex synthetic task and extrapolation tests; benchmark names and model sizes not on abstract page",
+       "note": "Supported by abstract summary. 'Dramatically' is slightly stronger than the summary's 'outperforms'; unverified."
+      },
+      {
+       "claim": "PonderNet matches SOTA on a real-world QA dataset using less compute, and reaches SOTA on a reasoning test.",
+       "supported": true,
+       "scale": "Real-world QA dataset and reasoning benchmark; parameter counts and compute not on abstract page",
+       "note": "Supported by summary; the quote 'matched the current state of the art results, but using less compute' not verified verbatim."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "looped",
+   "topic": "Looped / recurrent-depth transformers and depth recurrence for language modeling, including parameter-matched vs compute-matched comparisons",
+   "papers": [
+    {
+     "arxiv_id": "2502.05171",
+     "title_on_page": "Scaling up Test-Time Compute with Latent Reasoning: A Recurrent Depth Approach",
+     "id_matches_title": true,
+     "first_author_on_page": "Jonas Geiping",
+     "year": 2025,
+     "role": "origin of the commitment (recurrent-depth LM)",
+     "claims": [
+      {
+       "claim": "Recurrent-depth model scales test-time compute via latent reasoning without extra tokens; needs no specialized training data and works with small context windows.",
+       "supported": true,
+       "scale": "Proof-of-concept 3.5B params, 800B tokens; compute-equivalent to 50B params. Not small scale.",
+       "note": "Abstract paraphrase confirmed; the quoted fragment is stitched from two phrases, so check exact wording before quoting."
+      },
+      {
+       "claim": "Reasoning benchmark performance improves with recurrent compute, sometimes dramatically, at load equivalent to 50B parameters.",
+       "supported": true,
+       "scale": "3.5B params, 800B tokens",
+       "note": "Gain is at test-time recurrence; 50B is a compute-equivalence figure, not a parameter count."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2301.13196",
+     "title_on_page": "Looped Transformers as Programmable Computers",
+     "id_matches_title": true,
+     "first_author_on_page": "Angeliki Giannou",
+     "year": 2023,
+     "role": "origin of looping a fixed transformer as a programmable computer (theory and constructions)",
+     "claims": [
+      {
+       "claim": "A constant number of layers can emulate basic computing blocks; a looped 13-layer transformer can execute iterative algorithms.",
+       "supported": true,
+       "scale": "Theoretical constructions, 13-layer looped transformer; no language-model experiments",
+       "note": "Abstract matches in substance."
+      },
+      {
+       "claim": "Even shallow transformers can execute general-purpose programs when looped.",
+       "supported": false,
+       "scale": "Theoretical",
+       "note": "The fetch summary did not show this sentence. It is likely from the abstract or intro but was not verified, so it is marked unverified."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2311.12424",
+     "title_on_page": "Looped Transformers are Better at Learning Learning Algorithms",
+     "id_matches_title": true,
+     "first_author_on_page": "Liu Yang",
+     "year": 2023,
+     "role": "empirical comparison vs standard Transformer on in-context data-fitting (ICLR 2024)",
+     "claims": [
+      {
+       "claim": "Looped transformer performs comparably to a standard transformer on data-fitting problems with less than 10% of the parameters.",
+       "supported": true,
+       "scale": "Small synthetic in-context data-fitting tasks; exact model sizes not in the abstract",
+       "note": "Abstract says 'various data-fitting problems'. This is a parameter-efficiency comparison, not a compute-matched one, and it is not on language modeling."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2502.17416",
+     "title_on_page": "Reasoning with Latent Thoughts: On the Power of Looped Transformers",
+     "id_matches_title": true,
+     "first_author_on_page": "Nikunj Saunshi",
+     "year": 2025,
+     "role": "empirical comparison of looped k-layer vs non-looped kL-layer (depth-matched effective depth; ICLR 2025)",
+     "claims": [
+      {
+       "claim": "A k-layer transformer looped L times nearly matches a kL-layer non-looped model on synthetic reasoning tasks.",
+       "supported": true,
+       "scale": "Synthetic tasks (addition, p-hop induction, math); model sizes not in abstract",
+       "note": "The looped model has k-layer parameters but kL effective depth, so it is parameter-lean and compute-comparable to kL."
+      },
+      {
+       "claim": "k layers looped L times can be competitive with, if not better than, a kL-layer language model on downstream reasoning tasks.",
+       "supported": true,
+       "scale": "Language-model experiments; parameter counts not in abstract",
+       "note": "The abstract says 'competitive with, or sometimes better than' deeper LMs on reasoning tasks. The quote's exact wording was not verified. Scale and caveats need the full text."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2410.20672",
+     "title_on_page": "Relaxed Recursive Transformers: Effective Parameter Sharing with Layer-wise LoRA",
+     "id_matches_title": true,
+     "first_author_on_page": "Sangmin Bae",
+     "year": 2024,
+     "role": "alternative (parameter-sharing recursive transformer converted from pretrained models; not a looped-depth origin)",
+     "claims": [
+      {
+       "claim": "Recursive models outperform similar-sized vanilla pretrained models; the theoretical 2-3x inference throughput gain comes from Continuous Depth-wise Batching.",
+       "supported": true,
+       "scale": "About 1B scale (Recursive Gemma 1B vs TinyLlama/Pythia 1B-class baselines; named baselines not confirmed on the fetched page). The 2-3x figure is theoretical.",
+       "note": "The abstract also says the models outperform distillation baselines. The 2-3x gain is theoretical, not measured."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2507.10524",
+     "title_on_page": "Mixture-of-Recursions: Learning Dynamic Recursive Depths for Adaptive Token-Level Computation",
+     "id_matches_title": true,
+     "first_author_on_page": "Sangmin Bae",
+     "year": 2025,
+     "role": "empirical comparison vs vanilla Transformers at equal training FLOPs",
+     "claims": [
+      {
+       "claim": "At equal training FLOPs and smaller model sizes, MoR significantly lowers validation perplexity vs vanilla.",
+       "supported": true,
+       "scale": "135M to 1.7B params; equal training FLOPs (compute-matched), with smaller models, so not a pure parameter match",
+       "note": "The word 'significantly' was not confirmed in the fetched summary."
+      },
+      {
+       "claim": "Improves few-shot accuracy while delivering higher throughput vs vanilla and existing recursive baselines.",
+       "supported": true,
+       "scale": "135M to 1.7B params",
+       "note": "Matches the abstract summary."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "mod-earlyexit",
+   "topic": "Conditional per-token depth: Mixture-of-Depths and early exit in decoder LMs",
+   "papers": [
+    {
+     "arxiv_id": "2404.02258",
+     "title_on_page": "Mixture-of-Depths: Dynamically allocating compute in transformer-based language models",
+     "id_matches_title": true,
+     "first_author_on_page": "David Raposo",
+     "year": 2024,
+     "role": "origin of the commitment (Mixture-of-Depths, per-token top-k routing of compute in a decoder LM)",
+     "claims": [
+      {
+       "claim": "Standard Transformer LMs spread compute uniformly across positions, motivating learned per-position compute allocation.",
+       "supported": true,
+       "scale": "not stated in abstract (no model sizes)",
+       "note": "Fetch tool returned only a paraphrase (uniform allocation vs top-k routing); exact quote wording not verbatim-checked."
+      },
+      {
+       "claim": "MoD models match baseline performance at equivalent training FLOPs and wall-clock time.",
+       "supported": true,
+       "scale": "not stated in abstract; small-scale ablations to be checked in full text",
+       "note": "Matches the abstract summary."
+      },
+      {
+       "claim": "Up to 50% faster stepping during post-training sampling.",
+       "supported": true,
+       "scale": "not stated in abstract",
+       "note": "Abstract says up to 50% faster in sampling; verbatim quote not confirmed. Note this is a sampling speedup, not a quality claim."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2207.07061",
+     "title_on_page": "Confident Adaptive Language Modeling",
+     "id_matches_title": true,
+     "first_author_on_page": "Tal Schuster",
+     "year": 2022,
+     "role": "origin of the commitment (early exit per token with calibrated confidence stopping, CALM)",
+     "claims": [
+      {
+       "claim": "Adaptive per-token early exit reduces compute with potential speedup up to 3x while maintaining high performance.",
+       "supported": true,
+       "scale": "not stated in abstract; three text generation tasks",
+       "note": "Abstract says speedup up to 3x while maintaining high performance. The word provably in the proposed quote was not confirmed by the fetched summary, which says only maintaining high performance; verify against the full abstract before keeping provably."
+      },
+      {
+       "claim": "The framework is demonstrated empirically and theoretically on text generation tasks.",
+       "supported": true,
+       "scale": "not stated in abstract (no model sizes)",
+       "note": "Three text generation tasks confirmed. Theoretical analysis was not explicitly confirmed in the fetched summary; likely in the abstract but unverified here."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2404.16710",
+     "title_on_page": "LayerSkip: Enabling Early Exit Inference and Self-Speculative Decoding",
+     "id_matches_title": true,
+     "first_author_on_page": "Mostafa Elhoushi",
+     "year": 2024,
+     "role": "empirical comparison (early exit with layer dropout and self-speculative decoding, versus standard full-depth inference)",
+     "claims": [
+      {
+       "claim": "Early-exit inference with self-speculative verification yields wall-clock speedups up to 2.16x on CNN/DM summarization, 1.82x on coding, and 2.0x on TOPv2.",
+       "supported": true,
+       "scale": "Llama models of several sizes, across pretraining, continual pretraining, domain finetuning and task finetuning; exact sizes not given. Small-scale (<=350M) is NOT supported by the abstract.",
+       "note": "The speedup numbers match the abstract."
+      },
+      {
+       "claim": "Exit at early layers, then verify and correct with remaining layers.",
+       "supported": true,
+       "scale": "Llama models of several sizes; exact sizes not stated",
+       "note": "Matches the self-speculative decoding description."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "linear-attn",
+   "topic": "Linear attention as a replacement for softmax attention memory; kernel feature maps; gated linear attention",
+   "papers": [
+    {
+     "arxiv_id": "2006.16236",
+     "title_on_page": "Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention",
+     "id_matches_title": true,
+     "first_author_on_page": "Angelos Katharopoulos",
+     "year": 2020,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Self-attention can be rewritten as a linear dot-product of kernel feature maps, permitting a recurrent implementation for autoregressive decoding.",
+       "supported": true,
+       "scale": "Abstract only; no model sizes or datasets given. Phrase 'a linear dot-product of kernel feature maps' confirmed; abstract also mentions an iterative implementation and link to RNNs."
+      },
+      {
+       "claim": "Linear transformers achieve performance similar to vanilla softmax transformers.",
+       "supported": true,
+       "scale": "Abstract phrase confirmed; no model sizes in abstract. Only quantitative figure is 'up to 4000x faster on autoregressive prediction of very long sequences'. Similar-performance claim is unquantified here and is stated as a general claim, so treat as weakly scoped.",
+       "note": "Quote verified in abstract; scale of the quality comparison not verified."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2102.11174",
+     "title_on_page": "Linear Transformers Are Secretly Fast Weight Programmers",
+     "id_matches_title": true,
+     "first_author_on_page": "Imanol Schlag",
+     "year": 2021,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "Linearised self-attention is formally equivalent to early-1990s fast weight controllers, and linear attention has a memory capacity limit due to purely additive outer-product updates.",
+       "supported": true,
+       "scale": "Theory plus synthetic retrieval, machine translation and language modelling experiments. Abstract confirms equivalence phrase and 'a memory capacity limitation of recent linearised softmax attention variants'.",
+       "note": "The 'purely additive outer-product updates' causal attribution is a mild paraphrase; the abstract describes replacing additive outer products with a delta-rule-like programming instruction."
+      },
+      {
+       "claim": "Delta-rule update improves over the sum-update linear transformer on WikiText-103 at small scale.",
+       "supported": true,
+       "scale": "Small (D=128, L=256, ~40M params) and medium (D=256, L=384, ~90M params). Table 2 test PPL: sum 38.3 vs delta 35.5 (small); sum 33.0 vs delta 31.5 (medium). Valid: 37.1 vs 34.1 and 31.1 vs 29.7. Standard softmax Transformer baseline is 34.1 (small) and 29.6 (medium) test, so delta still trails softmax at medium. Quote confirmed verbatim in HTML version."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2312.06635",
+     "title_on_page": "Gated Linear Attention Transformers with Hardware-Efficient Training",
+     "id_matches_title": true,
+     "first_author_on_page": "Songlin Yang",
+     "year": 2023,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "GLA Transformer performs comparably to LLaMA-architecture Transformer++ on language modelling; Wiki PPL 28.65 vs 28.39 at 340M and 17.22 vs 16.85 at 1.3B.",
+       "supported": true,
+       "scale": "Table 2 confirmed: 340M params/15B tokens (28.39 Transformer++ vs 28.65 GLA) and 1.3B/100B tokens (16.85 vs 17.22). Dataset is a 100B-token SlimPajama subset, Mistral tokenizer. Quote 'Both GLA Transformer and Mamba show comparable performance to Transformer++' is verbatim in Section 5.2. Note GLA is slightly worse in both rows. The entry's remark about a '5-30M-adjacent' regime is irrelevant: smallest reported scale is 340M, not 5-30M. The abstract itself says 'LLaMA-architecture Transformer' rather than 'Transformer++'.",
+       "note": "Numbers verified from HTML Table 2; only first 100K of 117K chars read."
+      },
+      {
+       "claim": "GLA generalizes in length: trained at 2K context it stays usable beyond 20K without significant perplexity degradation.",
+       "supported": true,
+       "scale": "Abstract phrase confirmed ('enabling a model trained on 2K to generalize to sequences longer than 20K without significant perplexity degradations'). Specific models used for the length-generalization evaluation were not confirmed in this check, so the '340M/1.3B' attribution is unverified.",
+       "note": "Model-size attribution for this claim unverified."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "ssm",
+   "topic": "State-space sequence models replacing attention: S4, Mamba, Mamba-2 and comparisons against Transformer++ at small scale",
+   "papers": [
+    {
+     "arxiv_id": "2111.00396",
+     "title_on_page": "Efficiently Modeling Long Sequences with Structured State Spaces",
+     "id_matches_title": true,
+     "first_author_on_page": "Albert Gu",
+     "year": 2021,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "S4 solves Path-X (length 16k) that all prior work fails on.",
+       "supported": true,
+       "scale": "Long Range Arena only, not causal LM; no 5-30M LM results.",
+       "note": "Abstract contains the quote. The 'establishing SSMs as a long-sequence alternative to attention' framing is the proposer's gloss, not the abstract's."
+      },
+      {
+       "claim": "Conventional RNNs, CNNs and Transformers struggle to scale to very long sequences, motivating structured state spaces.",
+       "supported": true,
+       "scale": "Qualitative motivation, sequences of 10000 or more steps.",
+       "note": "Abstract has the sentence with the number in LaTeX ($10000$). The abstract speaks of 'they', so the exact model list may differ slightly."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2312.00752",
+     "title_on_page": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+     "id_matches_title": true,
+     "first_author_on_page": "Albert Gu",
+     "year": 2023,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Mamba-3B outperforms same-size Transformers and matches Transformers twice its size on language modeling.",
+       "supported": true,
+       "scale": "3B parameters, outside the 5-30M range.",
+       "note": "Quote confirmed in the abstract."
+      },
+      {
+       "claim": "Mamba achieves about 5x higher inference throughput than Transformers.",
+       "supported": true,
+       "scale": "Throughput claim, not small-scale quality. The abstract does not state the model size.",
+       "note": "Quote confirmed; the abstract writes it as 5$\\times$."
+      },
+      {
+       "claim": "Selective (input-dependent) SSM parameters address the weakness on discrete modalities; the scaling sweep uses Transformer++ as baseline across about 125M-1.3B parameters at Chinchilla token counts.",
+       "supported": false,
+       "scale": "Sweep of 125M-1.3B and ablations around 350M, per the proposer; none of this is in the abstract.",
+       "note": "The first half (the quote) is confirmed. The Transformer++ baseline, the parameter range and the token counts were not checked against the paper body. Split this claim and verify the sweep details from the paper text before relying on them."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2405.21060",
+     "title_on_page": "Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality",
+     "id_matches_title": true,
+     "first_author_on_page": "Tri Dao",
+     "year": 2024,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "Mamba-2 (via SSD) is 2-8x faster than Mamba while remaining competitive with Transformers on language modeling.",
+       "supported": true,
+       "scale": "Abstract gives no parameter count. No Transformer++ small-scale comparison was verified.",
+       "note": "Quote confirmed in the abstract. The 2-8X figure refers to the core layer speed, not whole-model training or inference."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2406.07887",
+     "title_on_page": "An Empirical Study of Mamba-based Language Models",
+     "id_matches_title": true,
+     "first_author_on_page": "Roger Waleffe",
+     "year": 2024,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "Earlier controlled comparisons were small-scale (<3B parameters, <1T tokens); this study compares 8B Mamba, Mamba-2 and Transformer on identical data up to 3.5T tokens and finds Mamba and Mamba-2 can match or exceed Transformers on common tasks.",
+       "supported": false,
+       "scale": "8B parameters, up to 3.5T tokens, outside the 5-30M range.",
+       "note": "The 8B and 3.5T numbers are confirmed. The fetch found no '<3B parameters and <1T tokens' numbers in the abstract. It says only that earlier comparisons were small scale. The quoted string is unverified and should not be shown as a verbatim quote. The 'match or exceed' claim is incomplete: the page also says pure SSMs lag Transformers on copying and in-context learning tasks. The hybrid model is also 8B."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "delta-retnet-rwkv",
+   "topic": "Delta-rule and retention models: DeltaNet, Gated DeltaNet, RetNet, RWKV",
+   "papers": [
+    {
+     "arxiv_id": "2406.06484",
+     "title_on_page": "Parallelizing Linear Transformers with the Delta Rule over Sequence Length",
+     "id_matches_title": true,
+     "first_author_on_page": "Songlin Yang",
+     "year": 2024,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Introduces DeltaNet, a hardware-efficient algorithm for training linear transformers with the delta rule parallelized over sequence length.",
+       "supported": true,
+       "scale": "1.3B parameters trained on 100B tokens (per abstract); the abstract does not mention 340M-scale runs (unverified from abstract). Note: the algorithm is new, but DeltaNet itself predates this paper; this paper makes it parallelizable."
+      },
+      {
+       "claim": "Reports that pure linear models still underperform Transformers, especially on in-context retrieval tasks.",
+       "supported": true,
+       "note": "The abstract says linear transformers and SSMs lag on in-context retrieval tasks. The 1.3B/100B-token result is a comparison against Mamba and GLA, not against Transformers. The abstract says hybrids outperform strong transformer baselines. The 'underperform Transformers' framing is background motivation, not a result at 1.3B scale.",
+       "scale": "1.3B parameters, 100B tokens (the claim is background motivation; the scale applies only to the Mamba/GLA comparison)"
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2412.06464",
+     "title_on_page": "Gated Delta Networks: Improving Mamba2 with Delta Rule",
+     "id_matches_title": true,
+     "first_author_on_page": "Songlin Yang",
+     "year": 2024,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "Combines gating with the delta update rule into Gated DeltaNet and reports it outperforms Mamba2 and DeltaNet on several benchmarks.",
+       "supported": true,
+       "note": "The abstract says it outperforms Mamba2 and DeltaNet across language modeling, commonsense reasoning, in-context retrieval, length extrapolation and long-context understanding. It gives no numbers. The quoted text in the entry appears to be a paraphrase, not a verbatim quote.",
+       "scale": "Model sizes not stated in abstract; verify in full paper. No head-to-head against standard Transformers in abstract."
+      },
+      {
+       "claim": "Frames linear Transformers as efficient alternatives to standard Transformers with limited retrieval and long-context performance, and proposes hybrids with sliding-window attention.",
+       "supported": true,
+       "note": "The abstract also mentions hybrids with Mamba2 layers, which the entry omits. The retrieval and long-context limitation is consistent with the abstract.",
+       "scale": "Not stated in abstract; verify in full paper"
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2307.08621",
+     "title_on_page": "Retentive Network: A Successor to Transformer for Large Language Models",
+     "id_matches_title": true,
+     "first_author_on_page": "Yutao Sun",
+     "year": 2023,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Proposes RetNet as a successor to Transformer for LLMs, with parallel, recurrent, and chunkwise recurrent computation paradigms and low-cost inference.",
+       "supported": true,
+       "note": "The title and abstract support the proposal and the three computation modes. The abstract describes the recurrent mode as O(1) inference. The 'strong successor' wording is the authors' own claim, not independently verified. Role label 'origin of the commitment' is a labeling choice, not checked.",
+       "scale": "Language modeling experiments; model sizes not stated in abstract (verify in full paper)"
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2305.13048",
+     "title_on_page": "RWKV: Reinventing RNNs for the Transformer Era",
+     "id_matches_title": true,
+     "first_author_on_page": "Bo Peng",
+     "year": 2023,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "Claims RWKV performs on par with similarly sized Transformers while keeping linear-time inference.",
+       "supported": true,
+       "note": "The abstract reports comparable performance to similarly sized Transformers and constant compute and memory per step at inference. The paper has 34 authors. The abstract states 'comparable'. The entry's quoted phrase 'on par' is close but may be a paraphrase.",
+       "scale": "Models up to 14B parameters (per abstract); no small-scale (<=350M) claim in abstract"
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2503.14456",
+     "title_on_page": "RWKV-7 \"Goose\" with Expressive Dynamic State Evolution",
+     "id_matches_title": true,
+     "first_author_on_page": "Bo Peng",
+     "year": 2025,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "Claims RWKV-7 exceeds the capabilities of Transformers under standard complexity conjectures, with constant memory and constant per-token inference.",
+       "supported": true,
+       "note": "The abstract supports this as a theoretical expressivity claim. RWKV-7 can do state tracking and recognize all regular languages, whereas Transformers are limited to TC0. It is not an empirical result. The abstract's empirical results are at 2.9B: new multilingual state of the art at 3B scale, and matching the English 3B state of the art. The abstract says four models from 0.19B to 2.9B were released, but it reports no results for the 0.19B model. So the 0.19B model as 'the small-scale evidence' is not supported by the abstract.",
+       "scale": "Abstract reports results only for the 2.9B model; four models released from 0.19B to 2.9B. No 0.19B results in the abstract. The expressivity claim is theoretical and has no scale."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "hybrid-swa",
+   "topic": "Sliding-window attention and hybrid attention+recurrent models; recall vs memory tradeoff",
+   "papers": [
+    {
+     "arxiv_id": "2004.05150",
+     "title_on_page": "Longformer: The Long-Document Transformer",
+     "first_author_on_page": "Iz Beltagy",
+     "year": 2020,
+     "role": "origin of the commitment (sliding-window plus global attention)",
+     "id_matches_title": true,
+     "claims": [
+      {
+       "claim": "Attention scales linearly and is a drop-in replacement for self-attention.",
+       "supported": true,
+       "scale": "Abstract gives no parameter counts; base-size scale not verified",
+       "note": "Fetch confirmed linear scaling and local windowed plus global attention. 'Drop-in replacement' wording is from my recollection of the abstract; the fetch tool only summarized."
+      },
+      {
+       "claim": "Pretrained Longformer consistently outperforms RoBERTa on long-document tasks.",
+       "supported": true,
+       "scale": "Parameter count not stated in abstract; RoBERTa-base comparison not verified here",
+       "note": "Fetch confirmed outperforms RoBERTa on long-document tasks. The word 'consistently' was not confirmed verbatim. The abstract also reports SOTA on text8/enwik8 and introduces LED."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2402.19427",
+     "title_on_page": "Griffin: Mixing Gated Linear Recurrences with Local Attention for Efficient Language Models",
+     "first_author_on_page": "Soham De",
+     "year": 2024,
+     "role": "alternative (gated linear recurrence plus local attention hybrid)",
+     "id_matches_title": true,
+     "claims": [
+      {
+       "claim": "Griffin matches Llama-2 while trained on over 6x fewer tokens.",
+       "supported": true,
+       "scale": "Up to 14B parameters",
+       "note": "Match to Llama-2 confirmed in fetch. The '6x fewer tokens' figure was not shown in the summary and rests on my recollection of the abstract. Hawk (pure RNN) also exceeds Mamba downstream."
+      },
+      {
+       "claim": "Matches Transformer hardware efficiency in training; lower latency and higher throughput at inference.",
+       "supported": true,
+       "scale": "Up to 14B parameters",
+       "note": "Not shown in the fetch output; consistent with the known abstract. Verify the exact quote."
+      },
+      {
+       "claim": "Griffin extrapolates to sequences significantly longer than seen in training.",
+       "supported": true,
+       "scale": "Up to 14B parameters",
+       "note": "Confirmed in fetch summary."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2402.18668",
+     "title_on_page": "Simple linear attention language models balance the recall-throughput tradeoff",
+     "first_author_on_page": "Simran Arora",
+     "year": 2024,
+     "role": "empirical comparison (recall vs state size; BASED = linear + sliding-window attention)",
+     "id_matches_title": true,
+     "claims": [
+      {
+       "claim": "Tradeoff between state size and recall; fixed-state H3, Mamba, RWKV struggle at recall.",
+       "supported": true,
+       "scale": "Abstract cites 1.3B models; smaller scales not verified",
+       "note": "Confirmed in fetch summary. Note the abstract frames it as a recall-throughput/memory tradeoff."
+      },
+      {
+       "claim": "Tuning window size and feature dimension traverses the recall-memory Pareto frontier; BASED beats Mamba on recall-intensive tasks by 6.22 accuracy points.",
+       "supported": true,
+       "scale": "1.3B parameters",
+       "note": "Window-size/feature-dimension tuning and recall outperformance confirmed. The specific 6.22 number was not shown in the fetch; it matches my recollection of the abstract. Verify the number and that the comparison is against Mamba."
+      },
+      {
+       "claim": "24x higher generation throughput than FlashAttention-2 generating 1024 tokens with 1.3B models.",
+       "supported": true,
+       "scale": "1.3B parameters",
+       "note": "24x confirmed; 1024 tokens and 1.3B detail not shown in the fetch but consistent with the paper."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2406.07522",
+     "title_on_page": "Samba: Simple Hybrid State Space Models for Efficient Unlimited Context Language Modeling",
+     "first_author_on_page": "Liliang Ren",
+     "year": 2024,
+     "role": "alternative (layer-wise Mamba plus sliding-window attention hybrid)",
+     "id_matches_title": true,
+     "claims": [
+      {
+       "claim": "Mamba combined with sliding-window attention; after 4K pretraining, improved perplexity up to 1M context zero-shot.",
+       "supported": true,
+       "scale": "Up to 3.8B parameters, 3.2T tokens",
+       "note": "Confirmed in fetch. 'Layer-wise' wording not verified verbatim."
+      },
+      {
+       "claim": "After finetuning, extrapolates to 256K with perfect passkey retrieval.",
+       "supported": true,
+       "scale": "3.8B parameters",
+       "note": "Confirmed: perfect passkey retrieval at 256K after finetuning. The claim's 'finetuning on 4K sequences' detail is unverified. 'Perfect memory recall' is an overreach beyond passkey retrieval, which is a narrow synthetic task."
+      },
+      {
+       "claim": "3.73x higher throughput than GQA Transformers on 128K-length prompts.",
+       "supported": true,
+       "scale": "3.8B parameters; no sub-350M result",
+       "note": "Throughput gain over GQA Transformers confirmed qualitatively; the 3.73x figure is not shown in the fetch output, so verify the number."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2403.19887",
+     "title_on_page": "Jamba: A Hybrid Transformer-Mamba Language Model",
+     "first_author_on_page": "Opher Lieber",
+     "year": 2024,
+     "role": "alternative (hybrid Transformer-Mamba plus MoE; full attention layers, not sliding-window)",
+     "id_matches_title": true,
+     "claims": [
+      {
+       "claim": "Hybrid Transformer-Mamba MoE gives high throughput and small memory footprint vs vanilla Transformers.",
+       "supported": true,
+       "scale": "Production-scale MoE; fits a single 80GB GPU; no small-scale evidence",
+       "note": "Confirmed in fetch. Jamba is not a sliding-window model, so it is only tangential to the sliding-window topic."
+      },
+      {
+       "claim": "Strong results for up to 256K tokens context length.",
+       "supported": true,
+       "scale": "Production-scale; no sub-350M result",
+       "note": "Confirmed in fetch (long-context evaluations up to 256K)."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "memory-tokens",
+   "topic": "Memory tokens and recurrent memory for transformers",
+   "papers": [
+    {
+     "arxiv_id": "2006.11527",
+     "title_on_page": "Memory Transformer",
+     "id_matches_title": true,
+     "first_author_on_page": "Mikhail S. Burtsev",
+     "year": 2020,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Adding memory tokens and related memory extensions to a Transformer baseline improves performance on machine translation and language modelling.",
+       "supported": true,
+       "scale": "Abstract states no model sizes; small-scale not verified. Evidence is MT and LM; GLUE with a pretrained masked LM is mixed.",
+       "note": "Quote verbatim in abstract. Wording is 'positively correlates', which is weaker than 'improves'. Memory tokens are one of three extensions (also memory bottleneck and a memory-control layer)."
+      },
+      {
+       "claim": "Memory helps the model process global context, as seen in attention visualizations.",
+       "supported": true,
+       "scale": "Abstract states no model sizes. Qualitative attention analysis only.",
+       "note": "Quote verbatim in abstract. The abstract frames the visualization as suggestive evidence."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2207.06881",
+     "title_on_page": "Recurrent Memory Transformer",
+     "id_matches_title": true,
+     "first_author_on_page": "Aydar Bulatov",
+     "year": 2022,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "Memory tokens added to a vanilla Transformer, with no architectural change, give a segment-level recurrent model.",
+       "supported": true,
+       "scale": "Abstract states no model sizes; small-scale not verified.",
+       "note": "Abstract quote confirmed. Published at NeurIPS 2022; v2 December 2022."
+      },
+      {
+       "claim": "On language modeling the model performs on par with Transformer-XL for smaller memory sizes, and outperforms it on tasks needing longer sequence processing.",
+       "supported": true,
+       "scale": "Abstract states no model sizes. The comparison is against Transformer-XL. Exact small-scale ablation numbers were not verified.",
+       "note": "Both halves confirmed in abstract. 'Outperforms' applies to long-sequence tasks, not to language modeling in general."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2309.16588",
+     "title_on_page": "Vision Transformers Need Registers",
+     "id_matches_title": true,
+     "first_author_on_page": "Timothée Darcet",
+     "year": 2023,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "Extra learnable register tokens appended to the ViT input remove high-norm artifact tokens in feature maps.",
+       "supported": true,
+       "scale": "Vision Transformers only, not causal LMs. Abstract gives no model sizes and mentions only 'larger models' for object discovery. Out of scope for a causal LM box; kept as an alternative.",
+       "note": "Quote verbatim in abstract. The abstract says 'extra tokens' added to the input sequence. 'Learnable' and 'appended' come from the paper, not the abstract."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "residual",
+   "topic": "Alternatives to a single additive residual stream: highway networks, DenseFormer, hyper-connections, manifold-constrained hyper-connections",
+   "papers": [
+    {
+     "arxiv_id": "1505.00387",
+     "title_on_page": "Highway Networks",
+     "id_matches_title": true,
+     "first_author_on_page": "Rupesh Kumar Srivastava",
+     "year": 2015,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Gated additive skip paths let very deep networks train directly with SGD.",
+       "supported": true,
+       "scale": "Hundreds of layers; abstract gives no small-LM evidence",
+       "note": "Abstract says hundreds-of-layers highway nets train directly with SGD, via gating units. 'Additive' is the entry's wording, not the abstract's."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "1512.03385",
+     "title_on_page": "Deep Residual Learning for Image Recognition",
+     "id_matches_title": true,
+     "first_author_on_page": "Kaiming He",
+     "year": 2015,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "Identity-skip residual networks are easier to optimize and gain accuracy from greater depth.",
+       "supported": true,
+       "scale": "Vision only: up to 152 layers on ImageNet, CIFAR-10 at 100 and 1000 layers; no LM evidence",
+       "note": "Abstract supports easier optimization and accuracy gains from depth. The word 'identity-skip' comes from the paper body, not the abstract. Role label 'alternative' is odd for the baseline residual design. 'Baseline' would fit better."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2402.02622",
+     "title_on_page": "DenseFormer: Enhancing Information Flow in Transformers via Depth Weighted Averaging",
+     "id_matches_title": true,
+     "first_author_on_page": "Matteo Pagliardini",
+     "year": 2024,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "A learned depth-weighted average after each block improves perplexity without increasing model size.",
+       "supported": true,
+       "scale": "Abstract: only a few thousand added parameters, 'even at 100B scale'. That is a parameter-overhead statement, not evidence of training at 100B. Small-scale numbers are not in the abstract.",
+       "note": "Supported at the abstract level. Check the full paper for the actual trained model sizes. The abstract says 'without a significant increase in size', so the quote should say 'significantly' or be softened."
+      },
+      {
+       "claim": "DenseFormer reaches the perplexity of much deeper transformers with better data efficiency.",
+       "supported": true,
+       "scale": "Abstract only; model sizes unverified",
+       "note": "Matches the abstract, which also claims better memory use and inference time at equal perplexity."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2409.19606",
+     "title_on_page": "Hyper-Connections",
+     "id_matches_title": true,
+     "first_author_on_page": "Defa Zhu",
+     "year": 2024,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Hyper-connections are an alternative to residual connections that resolve the gradient-vanishing versus representation-collapse seesaw.",
+       "supported": true,
+       "scale": "LLM pre-training, dense and sparse; no sizes in abstract",
+       "note": "The abstract says HC address the tradeoff between gradient vanishing and representation collapse. 'Resolve' is slightly stronger than the abstract's 'address'. Also reports similar gains on vision tasks."
+      },
+      {
+       "claim": "Hyper-connections give significant gains over residual connections in LLM pre-training.",
+       "supported": true,
+       "scale": "Unquantified in abstract; check full paper for model sizes",
+       "note": "Abstract reports significant improvements. No numbers or sizes are given in the abstract. Latest version is v3 (March 2025)."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2512.24880",
+     "title_on_page": "mHC: Manifold-Constrained Hyper-Connections",
+     "id_matches_title": true,
+     "first_author_on_page": "Zhenda Xie",
+     "year": 2025,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Unconstrained hyper-connections compromise the identity mapping property; mHC projects the connection space onto a manifold to restore it.",
+       "supported": true,
+       "scale": "Abstract gives no model sizes; full paper needed",
+       "note": "Abstract says HC weaken the identity mapping property, causing instability, limited scalability and memory-access overhead. mHC constrains the residual connection space to a manifold to restore identity mapping. 'Projects' is the entry's wording; the abstract says 'constrains'."
+      },
+      {
+       "claim": "mHC is effective for training at scale with improved scalability.",
+       "supported": true,
+       "scale": "Unspecified in abstract; no small-scale (<=350M) evidence verified",
+       "note": "Abstract says mHC is effective for large-scale training with performance gains and superior scalability. No sizes are given, so small-scale applicability is unverified."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "sharing",
+   "topic": "Cross-layer parameter sharing in transformers and small LMs",
+   "papers": [
+    {
+     "arxiv_id": "1909.11942",
+     "title_on_page": "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations",
+     "id_matches_title": true,
+     "first_author_on_page": "Zhenzhong Lan",
+     "year": 2019,
+     "role": "origin of the idea (cross-layer parameter sharing in pretrained encoders)",
+     "claims": [
+      {
+       "claim": "Proposes two parameter-reduction techniques (including cross-layer sharing) to cut memory and speed up training of BERT, while reaching state of the art with fewer parameters than BERT-large.",
+       "supported": true,
+       "scale": "BERT-large scale encoder (not a decoder LM); exact ALBERT sizes not in abstract.",
+       "note": "Abstract confirms two parameter-reduction techniques, SOTA on GLUE/RACE/SQuAD with fewer parameters than BERT-large. The abstract does not name cross-layer sharing; that parenthetical comes from the full paper. The role label 'origin of the idea' is questionable since Universal Transformers (2018) predates ALBERT."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2402.14905",
+     "title_on_page": "MobileLLM: Optimizing Sub-billion Parameter Language Models for On-Device Use Cases",
+     "id_matches_title": true,
+     "first_author_on_page": "Zechun Liu",
+     "year": 2024,
+     "role": "most informative small-scale empirical comparison (immediate block-wise weight sharing in a decoder LM)",
+     "claims": [
+      {
+       "claim": "Proposes immediate block-wise weight sharing, which adds no model size and only a small latency cost.",
+       "supported": true,
+       "scale": "sub-billion decoder LMs (125M/350M)",
+       "note": "Abstract confirms block-wise weight sharing with no model size increase and slight latency overhead. The fetch tool gave a paraphrase, so the exact word 'immediate' was not seen in the returned text."
+      },
+      {
+       "claim": "The weight-sharing variant (MobileLLM-LS) gives a further accuracy gain over MobileLLM at small scales (0.7%/0.8% at 125M/350M).",
+       "supported": true,
+       "scale": "125M and 350M parameters",
+       "note": "Abstract mentions a further small accuracy improvement for MobileLLM-LS. The fetch summary did not return the specific 0.7%/0.8% figures, so those numbers were not independently confirmed here, though they match the published abstract as I recall it. Re-check against the abstract."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2104.06022",
+     "title_on_page": "Lessons on Parameter Sharing across Layers in Transformers",
+     "id_matches_title": true,
+     "first_author_on_page": "Sho Takase",
+     "year": 2021,
+     "role": "alternative to full cross-layer sharing (sharing strategies for Transformers)",
+     "claims": [
+      {
+       "claim": "Proposes a parameter sharing method for Transformers that relaxes sharing one layer's parameters across all layers, reporting efficiency in parameter size and computation time.",
+       "supported": true,
+       "scale": "Not stated in abstract; experiments are in machine translation (including large WMT datasets). Abstract does not compare directly to a standard Transformer.",
+       "note": "Confirmed. Three strategies named: Sequence, Cycle, Cycle (rev). The page is v4 (revised June 2023), first submitted April 2021. The quote 'We propose a parameter sharing method for Transformers' was not seen verbatim in the returned text."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "1807.03819",
+     "title_on_page": "Universal Transformers",
+     "id_matches_title": true,
+     "first_author_on_page": "Mostafa Dehghani",
+     "year": 2018,
+     "role": "origin of the idea (recurrence over depth with shared parameters)",
+     "claims": [
+      {
+       "claim": "Proposes the Universal Transformer, a parallel-in-time self-attentive recurrent sequence model. The abstract does not explicitly mention shared parameters across depth.",
+       "supported": true,
+       "scale": "architectural/theoretical; reports gains on algorithmic tasks, LAMBADA, and WMT14 En-De (+0.9 BLEU); no model size stated in abstract.",
+       "note": "Confirmed as a self-attentive recurrent model generalizing the Transformer, with per-position dynamic halting. The abstract does not state weight sharing across depth, so the 'shared parameters' framing in the role field needs the full paper."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "moe",
+   "topic": "Mixture-of-Experts FFNs vs dense FFNs, especially at small scale",
+   "papers": [
+    {
+     "arxiv_id": "1701.06538",
+     "title_on_page": "Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer",
+     "first_author_on_page": "Noam Shazeer",
+     "year": 2017,
+     "id_matches_title": true,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Introduces a sparsely-gated MoE layer of up to thousands of feed-forward experts, with conditional computation giving large capacity gains at small compute cost.",
+       "supported": true,
+       "scale": "Up to 137B parameters in LSTM-based models (MoE applied between stacked LSTM layers); language modeling and machine translation; not small-scale Transformers",
+       "note": "Quote and 137B figure confirmed in abstract."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2101.03961",
+     "title_on_page": "Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity",
+     "first_author_on_page": "William Fedus",
+     "year": 2021,
+     "id_matches_title": true,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "Top-1 routing (Switch) simplifies MoE and gives pre-training speedups over dense T5 baselines at matched compute.",
+       "supported": true,
+       "scale": "T5-Base/Large based models up to trillion-parameter sparse models (4x speedup over T5-XXL); not small-scale (<=350M) in headline results",
+       "note": "Abstract says 'up to 7x increases in pre-training speed' with same computational resources. The abstract does not explicitly say 'top-1'; that detail is from the paper body (simplified routing). Speedup is in steps/time-to-quality, not small-scale."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2402.07871",
+     "title_on_page": "Scaling Laws for Fine-Grained Mixture of Experts",
+     "first_author_on_page": "Jakub Krajewski",
+     "year": 2024,
+     "id_matches_title": true,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "Introduces expert granularity as a hyperparameter; the efficiency gap between dense and MoE models widens with scale.",
+       "supported": true,
+       "scale": "Scaling-law fits over model size, training tokens and granularity; smallest sizes not verified from the abstract",
+       "note": "Phrase confirmed in abstract. Abstract-only check; exact size range not verified."
+      },
+      {
+       "claim": "Setting expert size equal to the feed-forward layer size is suboptimal at almost any compute budget.",
+       "supported": true,
+       "scale": "Scaling-law fits across compute budgets; empirical fit extrapolated, not small-scale specific",
+       "note": "Phrase confirmed in abstract."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2409.02060",
+     "title_on_page": "OLMoE: Open Mixture-of-Experts Language Models",
+     "first_author_on_page": "Niklas Muennighoff",
+     "year": 2024,
+     "id_matches_title": true,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "A fully open sparse MoE LM with 7B total parameters using about 1B active per token.",
+       "supported": true,
+       "scale": "1B active / 7B total parameters, pretrained on 5T tokens; not small-scale, but fully open weights, data, code and logs",
+       "note": "Quote verbatim in abstract. Abstract also mentions MoE training experiments and routing analysis."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2212.05055",
+     "title_on_page": "Sparse Upcycling: Training Mixture-of-Experts from Dense Checkpoints",
+     "first_author_on_page": "Aran Komatsuzaki",
+     "year": 2022,
+     "id_matches_title": true,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "Initializes a sparse MoE from a dense checkpoint, reusing sunk dense training cost; upcycled models outperform dense counterparts with about 50% of the dense pretraining cost.",
+       "supported": true,
+       "scale": "T5 Base, Large, XL language models and ViT Base and Large vision models; evaluated on SuperGLUE and ImageNet; not small-scale (<=350M) beyond T5-Base/ViT-Base",
+       "note": "Quote confirmed in abstract. The scale note in the proposal ('large-scale') is slightly loose; models are Base to XL. The 50% figure is the extra compute relative to initial dense pretraining cost."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "position",
+   "topic": "Position encoding in causal LMs: RoPE vs ALiBi vs no positional encoding (NoPE)",
+   "papers": [
+    {
+     "arxiv_id": "2104.09864",
+     "title_on_page": "RoFormer: Enhanced Transformer with Rotary Position Embedding",
+     "id_matches_title": true,
+     "first_author_on_page": "Jianlin Su",
+     "year": 2021,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Introduces RoPE, encoding absolute position with a rotation matrix while incorporating explicit relative-position dependency into self-attention.",
+       "supported": true,
+       "scale": "Abstract gives no model size; evaluated on long text classification benchmarks (sizes not checked in full paper).",
+       "note": "Both quoted phrases appear in the abstract."
+      },
+      {
+       "claim": "RoPE gives decaying inter-token dependency with relative distance and is compatible with linear self-attention.",
+       "supported": true,
+       "scale": "Property claimed in the abstract; no model size or small-scale ablation stated on the abstract page.",
+       "note": "Abstract lists decay with distance and the ability to equip linear self-attention with relative position encoding. The quoted phrase attached to this claim only covers the relative-dependency part."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2108.12409",
+     "title_on_page": "Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation",
+     "id_matches_title": true,
+     "first_author_on_page": "Ofir Press",
+     "year": 2021,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "ALiBi biases query-key attention scores with a distance-proportional penalty, enabling extrapolation to longer inputs than trained on.",
+       "supported": true,
+       "scale": "1.3B parameters, trained on length 1024, extrapolating to length 2048 (confirmed on abstract page).",
+       "note": "Quote verified."
+      },
+      {
+       "claim": "ALiBi matches a sinusoidal-embedding model trained on length 2048 while training faster and using less memory.",
+       "supported": true,
+       "scale": "1.3B parameters (confirmed). The 11% faster and 11% less memory figures are verified.",
+       "note": "The dataset attribution is wrong. The abstract page does not say what the 1.3B model was trained on. WikiText-103 appears separately as a benchmark where ALiBi outperforms other position methods. Remove 'WikiText-103' from this claim's scale note unless the full paper confirms it."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2203.16634",
+     "title_on_page": "Transformer Language Models without Positional Encodings Still Learn Positional Information",
+     "id_matches_title": true,
+     "first_author_on_page": "Adi Haviv",
+     "year": 2022,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "Causal LMs with no explicit positional encoding (NoPE) remain competitive with standard Transformers.",
+       "supported": true,
+       "scale": "Abstract says the result holds across different datasets, model sizes and sequence lengths. It lists no parameter counts.",
+       "note": "Quote verified. The paper does not use the term NoPE; it says models without positional encodings."
+      },
+      {
+       "claim": "Models without positional encoding acquire an implicit notion of absolute position through the network, which probing reveals.",
+       "supported": true,
+       "scale": "Probing experiments; sizes not stated on the abstract page.",
+       "note": "Quote verified. The paper attributes this to the causal attention mask."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2305.19466",
+     "title_on_page": "The Impact of Positional Encoding on Length Generalization in Transformers",
+     "id_matches_title": true,
+     "first_author_on_page": "Amirhossein Kazemnejad",
+     "year": 2023,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "NoPE outperforms explicit positional encodings (ALiBi, RoPE, APE) for downstream length generalization at no extra computation cost.",
+       "supported": true,
+       "scale": "Decoder-only Transformers; model sizes not stated on the abstract page. The tasks are reasoning and math.",
+       "note": "Quote verified. The abstract compares five methods: APE, T5's Relative PE, ALiBi, Rotary and NoPE. The claim leaves out T5 Relative PE, so 'outperforms other explicit methods' covers more than the three listed."
+      },
+      {
+       "claim": "ALiBi, Rotary and APE are not well suited for length generalization in downstream tasks.",
+       "supported": true,
+       "scale": "Decoder-only Transformers; sizes not stated on the abstract page. Results are on downstream reasoning and math tasks.",
+       "note": "Quote verified."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "norm-act",
+   "topic": "Normalization and FFN activation in decoders: pre-LN vs post-LN, RMSNorm, SwiGLU/GLU variants, QK-norm and logit stability",
+   "papers": [
+    {
+     "arxiv_id": "2002.04745",
+     "title_on_page": "On Layer Normalization in the Transformer Architecture",
+     "id_matches_title": true,
+     "first_author_on_page": "Ruibin Xiong",
+     "year": 2020,
+     "role": "origin of commitment",
+     "claims": [
+      {
+       "claim": "Post-LN Transformers have large expected gradients near the output layer at initialization, which motivates warm-up; Pre-LN placement removes the need for warm-up.",
+       "supported": true,
+       "scale": "Theoretical analysis plus machine translation experiments (ICML 2020); model sizes not verified from the abstract.",
+       "note": "Abstract summary matches. The quoted wording was not confirmed verbatim, because the fetch tool paraphrased the abstract. Treat the quote as approximate."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "1910.07467",
+     "title_on_page": "Root Mean Square Layer Normalization",
+     "id_matches_title": true,
+     "first_author_on_page": "Biao Zhang",
+     "year": 2019,
+     "role": "origin of commitment",
+     "claims": [
+      {
+       "claim": "RMSNorm drops mean-centering from LayerNorm, is cheaper, and matches LayerNorm performance.",
+       "supported": true,
+       "scale": "Several tasks and architectures; sizes not stated in the abstract. The 7%~64% running-time reduction is as reported.",
+       "note": "The 7%~64% quote was confirmed. 'Matches' should be softened to 'comparable', which is the abstract's wording. The paper also introduces pRMSNorm."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2002.05202",
+     "title_on_page": "GLU Variants Improve Transformer",
+     "id_matches_title": true,
+     "first_author_on_page": "Noam Shazeer",
+     "year": 2020,
+     "role": "origin of commitment",
+     "claims": [
+      {
+       "claim": "GLU-family feed-forward activations (e.g. SwiGLU, GEGLU) improve over ReLU and GELU FFNs in Transformers.",
+       "supported": true,
+       "scale": "Transformer FFN sublayers; model sizes not stated in the abstract.",
+       "note": "The abstract says only that 'some' variants beat ReLU and GELU. The fetched abstract summary does not name SwiGLU or GEGLU, so those names come from the paper body, which was not checked. The quote could not be checked verbatim."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2010.04245",
+     "title_on_page": "Query-Key Normalization for Transformers",
+     "id_matches_title": true,
+     "first_author_on_page": "Alex Henry",
+     "year": 2020,
+     "role": "origin of commitment",
+     "claims": [
+      {
+       "claim": "QKNorm normalizes queries and keys before the attention dot product, improving low-resource translation.",
+       "supported": true,
+       "scale": "Low-resource bilingual translation: five TED Talks and IWSLT'15 pairs; average gain 0.928 BLEU over prior bilingual benchmarks. Model sizes not verified.",
+       "note": "QKNorm applies L2 normalization to queries and keys along the head dimension, then scales by a learnable parameter instead of 1/sqrt(d). The 0.928 BLEU figure was confirmed. This is a small-scale translation result and does not show decoder LM logit stability."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2309.14322",
+     "title_on_page": "Small-scale proxies for large-scale Transformer training instabilities",
+     "id_matches_title": true,
+     "first_author_on_page": "Mitchell Wortsman",
+     "year": 2023,
+     "role": "methodology",
+     "claims": [
+      {
+       "claim": "Training instabilities that appear only at large scale also appear in small models trained at high learning rates, so small proxies can be used to study them.",
+       "supported": true,
+       "scale": "Small models; exact parameter counts not verified from the abstract.",
+       "note": "The quote was confirmed. The instabilities studied are growing attention logits and output logits diverging from log probabilities. Mitigations from large scale work similarly at small scale. The paper also covers warm-up, weight decay and muParam."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2302.05442",
+     "title_on_page": "Scaling Vision Transformers to 22 Billion Parameters",
+     "id_matches_title": true,
+     "first_author_on_page": "Mostafa Dehghani",
+     "year": 2023,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "A recipe for stable training of a 22B-parameter ViT is presented. The abstract does not name QK-normalization; that detail must be checked in the paper body before citing it for QK-norm.",
+       "supported": true,
+       "scale": "22B parameters, vision (ViT-22B), not a decoder LM.",
+       "note": "The abstract summary supports the training-recipe claim. It does not mention QK-normalization, so the QK-norm detail remains unverified here and must be checked in the paper body. The quote could not be confirmed verbatim."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "tied",
+   "topic": "Tied input/output embeddings, especially for small models",
+   "papers": [
+    {
+     "arxiv_id": "1608.05859",
+     "title_on_page": "Using the Output Embedding to Improve Language Models",
+     "id_matches_title": true,
+     "first_author_on_page": "Ofir Press",
+     "year": 2016,
+     "role": "origin of the commitment (introduces tying input and output embeddings; EACL 2017)",
+     "claims": [
+      {
+       "claim": "Recommends tying input and output embeddings; the output matrix works as a valid word embedding.",
+       "supported": true,
+       "scale": "neural language models; qualitative, no sizes in abstract",
+       "note": "Abstract also says tying significantly reduces perplexity across several models. Verified via summary; verbatim quote not confirmed by fetch tool."
+      },
+      {
+       "claim": "Weight tying can shrink translation models to less than half original size without harming performance.",
+       "supported": true,
+       "scale": "neural translation models; sizes not given in abstract",
+       "note": "Matches abstract (paraphrased by fetch tool); exact quote wording unverified."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "1611.01462",
+     "title_on_page": "Tying Word Vectors and Word Classifiers: A Loss Framework for Language Modeling",
+     "id_matches_title": true,
+     "first_author_on_page": "Hakan Inan",
+     "year": 2016,
+     "role": "origin / alternative (independent proposal with loss-framework justification)",
+     "claims": [
+      {
+       "claim": "Tying input embedding and output projection greatly reduces trainable parameters; framework reaches state of the art on Penn Treebank with several network models.",
+       "supported": true,
+       "scale": "RNN word LMs on PTB; no parameter counts or perplexities in abstract",
+       "note": "Abstract says 'greatly reducing the number of trainable variables'. Entry's quote wording about 'a variety of network models' not verbatim-confirmed. 'Sound approach' is the entry's gloss, not an abstract claim."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2402.14905",
+     "title_on_page": "MobileLLM: Optimizing Sub-billion Parameter Language Models for On-Device Use Cases",
+     "id_matches_title": true,
+     "first_author_on_page": "Zechun Liu",
+     "year": 2024,
+     "role": "empirical comparison at small scale (embedding sharing is one of several combined choices; effect not isolated)",
+     "claims": [
+      {
+       "claim": "Deep-and-thin architecture with embedding sharing and GQA beats prior SOTA by 2.7%/4.3% accuracy at 125M/350M.",
+       "supported": true,
+       "scale": "125M and 350M params; gain is for combined architecture, not embedding sharing alone",
+       "note": "Numbers match. Abstract also reports MobileLLM-LS (block-wise weight sharing) adds 0.7%/0.8%. Sub-billion models, above 5-30M target range."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2502.02737",
+     "title_on_page": "SmolLM2: When Smol Goes Big -- Data-Centric Training of a Small Language Model",
+     "id_matches_title": true,
+     "first_author_on_page": "Loubna Ben Allal",
+     "year": 2025,
+     "role": "context only (small-model recipe; abstract does not discuss tied embeddings)",
+     "claims": [
+      {
+       "claim": "1.7B small LM trained on ~11T tokens that outperforms Qwen2.5-1.5B and Llama3.2-1B; no tied-embedding claim in abstract.",
+       "supported": true,
+       "scale": "1.7B params; far above 5-30M target range; not evidence on tying",
+       "note": "Abstract confirms 1.7B, ~11T tokens, outperforming Qwen2.5-1.5B and Llama3.2-1B. Confirmed absence of tying discussion in abstract."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "small-scale",
+   "topic": "Small-scale LM architecture findings: TinyStories depth/width, deep-and-thin vs wide at small scale, model shape in scaling laws",
+   "papers": [
+    {
+     "arxiv_id": "2305.07759",
+     "title_on_page": "TinyStories: How Small Can Language Models Be and Still Speak Coherent English?",
+     "first_author_on_page": "Ronen Eldan",
+     "year": 2023,
+     "id_matches_title": true,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "A TinyStories-style synthetic children's-story corpus lets much smaller LMs produce coherent English than standard models.",
+       "supported": true,
+       "scale": "Abstract: models below 10M total parameters, versus ~125M baselines (GPT-Neo small, GPT-2 small); also mentions single-transformer-block models.",
+       "note": "Quote confirmed in abstract. Dataset is GPT-3.5/GPT-4-generated stories using vocabulary of a 3-4 year old."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2001.08361",
+     "title_on_page": "Scaling Laws for Neural Language Models",
+     "first_author_on_page": "Jared Kaplan",
+     "year": 2020,
+     "id_matches_title": true,
+     "role": "alternative",
+     "claims": [
+      {
+       "claim": "Within a wide range, network width or depth has minimal effect on loss compared with total parameter count, compute and data.",
+       "supported": true,
+       "scale": "Abstract gives no numeric range for the width/depth claim; the 1e3 to 1e9 parameter span is not stated on the abstract page and was not verified here.",
+       "note": "Quote confirmed. The proposed scale note is unverified from the abstract and should be checked in the paper body. Also, the result is for a fixed non-embedding parameter count, so it does not speak to extremely deep-thin or wide-shallow shapes."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2402.14905",
+     "title_on_page": "MobileLLM: Optimizing Sub-billion Parameter Language Models for On-Device Use Cases",
+     "first_author_on_page": "Zechun Liu",
+     "year": 2024,
+     "id_matches_title": true,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "At sub-billion scale, deep-and-thin architectures with embedding sharing and grouped-query attention are the chosen design, rather than wide-and-shallow.",
+       "supported": true,
+       "scale": "Abstract names 125M and 350M parameter MobileLLM models (sub-billion).",
+       "note": "Quote confirmed. The abstract argues architecture matters more than data or parameter count at this scale. It also introduces MobileLLM-LS with block-wise weight sharing. The 'rather than wide-and-shallow' comparison is implied by the abstract; the supporting ablations are in the paper body and were not checked."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2310.19956",
+     "title_on_page": "The Impact of Depth on Compositional Generalization in Transformer Language Models",
+     "first_author_on_page": "Jackson Petty",
+     "year": 2023,
+     "id_matches_title": true,
+     "role": "empirical comparison",
+     "claims": [
+      {
+       "claim": "At constant total parameter count, deeper Transformers generalize more compositionally than shallower ones, trading depth for width.",
+       "supported": true,
+       "scale": "41M, 134M and 374M parameters, total parameters held constant across depth configurations.",
+       "note": "Quote confirmed. The abstract caveat is that the benefit of extra layers diminishes rapidly. The claim concerns compositional generalization, not language-modeling loss or perplexity, which the abstract says is a separate matter."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "screening",
+   "topic": "Architecture screening with synthetic tasks: MQAR/associative recall, MAD, and limits of synthetic proxies",
+   "papers": [
+    {
+     "arxiv_id": "2312.04927",
+     "title_on_page": "Zoology: Measuring and Improving Recall in Efficient Language Models",
+     "id_matches_title": true,
+     "first_author_on_page": "Simran Arora",
+     "year": 2023,
+     "role": "origin of MQAR",
+     "claims": [
+      {
+       "claim": "70M attention model beats 1.4B gated-convolution model on associative recall.",
+       "supported": true,
+       "scale": "70M vs 1.4B; I recall this headline comparison from the paper's intro rather than the abstract. The fetched abstract summary only mentions parameter-efficiency differences, and the 17 models trained were on the Pile.",
+       "note": "Verbatim quote not confirmed against the abstract text (fetch gave a paraphrase). Cite the intro or figure, not the abstract."
+      },
+      {
+       "claim": "Paper reformalizes associative recall as MQAR to match real language better; attention outperforms gated convolutions by a large margin on it.",
+       "supported": true,
+       "scale": "Synthetic task; the abstract reports 17 attention and gated-convolution LMs, a gap of up to 2.1 ppl on the Pile, ~82% of the gap attributed to associative recall, and hybrids closing 97.4% of the gap.",
+       "note": "MQAR introduction is confirmed. 'Large margin' is consistent with the paper but the abstract summary did not state it explicitly."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2403.17844",
+     "title_on_page": "Mechanistic Design and Scaling of Hybrid Architectures",
+     "id_matches_title": true,
+     "first_author_on_page": "Michael Poli",
+     "year": 2024,
+     "role": "origin of MAD",
+     "claims": [
+      {
+       "claim": "Curated synthetic tasks are predictive of scaling behavior of architectures.",
+       "supported": true,
+       "scale": "Over 500 LMs, 70M-7B parameters, compute-optimal and state-optimal scaling analyses. Exceeds the 350M small-scale band.",
+       "note": "Abstract confirms synthetic-task performance correlates with compute-optimal perplexity. Wording about 'scaling laws' is from memory of the abstract. Correlation is with compute-optimal perplexity, not a guarantee of ranking everywhere."
+      },
+      {
+       "claim": "MAD synthetics correlate with compute-optimal perplexity.",
+       "supported": true,
+       "scale": "70M-7B parameters, over 500 models.",
+       "note": "Confirmed by the abstract summary. Note the abstract frames this as a proxy for evaluating new architectures, and reports outperforming Transformer++, Hyena and Mamba."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2209.11895",
+     "title_on_page": "In-context Learning and Induction Heads",
+     "id_matches_title": true,
+     "first_author_on_page": "Catherine Olsson",
+     "year": 2022,
+     "role": "mechanistic basis for recall-style tasks",
+     "claims": [
+      {
+       "claim": "Induction heads are proposed as the mechanism for most in-context learning, motivating copy/recall probes.",
+       "supported": true,
+       "scale": "Abstract: strong causal evidence for small attention-only models, correlational evidence for larger models with MLPs. No parameter counts stated. Scale unverified.",
+       "note": "The 'might constitute the mechanism' hedge is the abstract's own. The 'why copy/recall tasks are used as probes' part is the table author's inference, not a claim in the abstract."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2212.14052",
+     "title_on_page": "Hungry Hungry Hippos: Towards Language Modeling with State Space Models",
+     "id_matches_title": true,
+     "first_author_on_page": "Daniel Y. Fu",
+     "year": 2022,
+     "role": "alternative (H3 SSM)",
+     "claims": [
+      {
+       "claim": "H3 matches attention on synthetic languages testing recall of earlier tokens, establishing synthetics as an early architecture screen.",
+       "supported": true,
+       "scale": "Synthetic tasks, no parameter count in the abstract.",
+       "note": "The 'matches attention on synthetic languages' part is confirmed. 'Establishing synthetics as an early screen' is overreach. The paper only motivates H3 from synthetic failures of prior SSMs."
+      },
+      {
+       "claim": "A 125M-parameter H3-attention hybrid outperforms Transformers on OpenWebText by 1.0 PPL.",
+       "supported": true,
+       "scale": "125M parameters, within the 350M band. Pure H3 comes close to Transformers on OpenWebText. Hybrids were scaled to 2.7B for Pile results.",
+       "note": "The fetched abstract summary did not repeat the 125M / 1.0 PPL numbers. They match my recollection of the abstract, but verify the exact numbers against the abstract or Table before final citation."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "baseline-origin",
+   "topic": "Origins of the baseline decoder: Transformer, GPT-style causal decoding, LLaMA recipe (pre-RMSNorm, SwiGLU, RoPE)",
+   "papers": [
+    {
+     "arxiv_id": "1706.03762",
+     "title_on_page": "Attention Is All You Need",
+     "first_author_on_page": "Ashish Vaswani",
+     "id_matches_title": true,
+     "year": 2017,
+     "role": "origin of the commitment",
+     "claims": [
+      {
+       "claim": "Introduces the Transformer, built solely from attention with no recurrence or convolution.",
+       "supported": true,
+       "scale": "WMT14 En-De (28.4 BLEU) and En-Fr (41.8 BLEU, 3.5 days on 8 GPUs). The ~65M base-model size is from the paper body and was not re-checked here.",
+       "note": "The fetched abstract confirms the attention-only architecture. The fetch tool truncated the quote, but the 'dispensing with recurrence and convolutions entirely' wording matches the known abstract. The original is an encoder-decoder, so it is not itself a decoder-only baseline."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "none",
+     "title_on_page": "Language Models are Unsupervised Multitask Learners (GPT-2); not on arXiv, only mirrors and secondary sources found",
+     "first_author_on_page": "Alec Radford",
+     "id_matches_title": true,
+     "year": 2019,
+     "claims": [
+      {
+       "claim": "Establishes GPT-style left-to-right causal decoder-only LM as the baseline decoder form.",
+       "supported": false,
+       "scale": "Secondary sources describe a 1.5B-parameter largest model trained on WebText. The 124M-1.5B family range was not confirmed from a primary source.",
+       "note": "No primary text was fetched and the quote is marked unverified, so do not cite verbatim. Authorship (Radford et al., Feb 2019, OpenAI) is confirmed by search. A PDF mirror exists, for example gwern.net/docs/ai/gpt/2019-radford.pdf. The causal decoder-only framing is also arguably credited to GPT-1 (Radford 2018) and Liu et al. 2018."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2302.13971",
+     "title_on_page": "LLaMA: Open and Efficient Foundation Language Models",
+     "first_author_on_page": "Hugo Touvron",
+     "id_matches_title": true,
+     "year": 2023,
+     "role": "origin of the commitment (recipe: pre-RMSNorm, SwiGLU, RoPE)",
+     "claims": [
+      {
+       "claim": "Llama-style recipe trained only on public data reaches strong performance.",
+       "supported": true,
+       "scale": "7B to 65B parameters, trillions of tokens. LLaMA-13B outperforms GPT-3 (175B) on most benchmarks. Not evaluated at 5-30M.",
+       "note": "The abstract supports the public-data and performance claim. The fetched abstract summary does not mention pre-norm, SwiGLU or RoPE. Those details come from the paper body and were not checked here."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "1910.07467",
+     "title_on_page": "Root Mean Square Layer Normalization",
+     "first_author_on_page": "Biao Zhang",
+     "id_matches_title": true,
+     "year": 2019,
+     "role": "alternative (pre-RMSNorm component)",
+     "claims": [
+      {
+       "claim": "RMSNorm drops mean-centering and matches LayerNorm quality while running faster.",
+       "supported": true,
+       "scale": "Running-time reduction of 7%-64% across several models, per the abstract. Exact model sizes were not checked.",
+       "note": "The abstract supports the 7%-64% figure and the comparable-performance claim. It hypothesizes that re-centering invariance is dispensable."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2002.04745",
+     "title_on_page": "On Layer Normalization in the Transformer Architecture",
+     "first_author_on_page": "Ruibin Xiong",
+     "id_matches_title": true,
+     "year": 2020,
+     "role": "methodology (pre-LN placement)",
+     "claims": [
+      {
+       "claim": "Pre-LN lets Transformers train without a learning-rate warm-up, which motivates the pre-norm default in Llama-style decoders.",
+       "supported": true,
+       "scale": "Machine translation, and I recall BERT pretraining as well. Model sizes were not verified. The paper is not about decoder-only LMs.",
+       "note": "The first half is supported: the abstract says Pre-LN has well-behaved gradients at init and motivates removing warm-up, with comparable results and less tuning. The clause about the Llama default is the citer's inference, not a claim made in the paper."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2002.05202",
+     "title_on_page": "GLU Variants Improve Transformer",
+     "first_author_on_page": "Noam Shazeer",
+     "id_matches_title": true,
+     "year": 2020,
+     "role": "empirical comparison (SwiGLU vs ReLU/GELU FFN)",
+     "claims": [
+      {
+       "claim": "GLU FFN variants, including SwiGLU, improve quality over ReLU or GELU FFN.",
+       "supported": true,
+       "scale": "Transformer sequence-to-sequence feed-forward sublayers. Exact sizes were not verified; the paper body is T5-style pretraining and fine-tuning.",
+       "note": "The abstract says only that 'some' variants yield quality improvements. It does not name SwiGLU, which is in the paper body. Wording should say 'some variants'."
+      }
+     ]
+    },
+    {
+     "arxiv_id": "2104.09864",
+     "title_on_page": "RoFormer: Enhanced Transformer with Rotary Position Embedding",
+     "first_author_on_page": "Jianlin Su",
+     "id_matches_title": true,
+     "year": 2021,
+     "role": "alternative (RoPE)",
+     "claims": [
+      {
+       "claim": "RoPE encodes position by rotating query and key vectors and gives flexible sequence length.",
+       "supported": true,
+       "scale": "RoFormer is evaluated on long-text classification benchmarks and pretraining. Exact sizes were not verified.",
+       "note": "The abstract says RoPE encodes absolute position with a rotation matrix and builds relative dependency into self-attention. It lists flexible sequence length, decaying dependency with distance, and linear-attention compatibility. The 'rotating query and key' detail is from the body, not the abstract."
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "id_checks": [
+  {
+   "id": "2603.08391",
+   "title_on_page": "Adaptive Loops and Memory in Transformers: Think Harder or Know More?",
+   "first_author_on_page": "Markus Frey",
+   "matches": false
+  },
+  {
+   "id": "2507.10524",
+   "title_on_page": "Mixture-of-Recursions: Learning Dynamic Recursive Depths for Adaptive Token-Level Computation.",
+   "first_author_on_page": "Sangmin Bae",
+   "matches": true
+  },
+  {
+   "id": "2604.21999",
+   "title_on_page": "Universal Transformers Need Memory: Depth-State Trade-offs in Adaptive Recursive Reasoning",
+   "first_author_on_page": "Grigory Sapunov",
+   "matches": false
+  },
+  {
+   "id": "2506.04761",
+   "title_on_page": "Log-Linear Attention",
+   "first_author_on_page": "Han Guo",
+   "matches": true
+  },
+  {
+   "id": "2603.14833",
+   "title_on_page": "Ablate and Rescue: A Causal Analysis of Residual Stream Hyper-Connections",
+   "first_author_on_page": "William Peng",
+   "matches": true
+  },
+  {
+   "id": "2604.13556",
+   "title_on_page": "YOCO++: Enhancing YOCO with KV Residual Connections for Efficient LLM Inference",
+   "first_author_on_page": "You Wu",
+   "matches": false
+  },
+  {
+   "id": "2402.07871",
+   "title_on_page": "Scaling Laws for Fine-Grained Mixture of Experts",
+   "first_author_on_page": "Jakub Krajewski",
+   "matches": true
+  },
+  {
+   "id": "2309.14322",
+   "title_on_page": "Small-scale proxies for large-scale Transformer training instabilities",
+   "first_author_on_page": "Mitchell Wortsman",
+   "matches": true
+  }
+ ],
+ "missing_topics": []
+}

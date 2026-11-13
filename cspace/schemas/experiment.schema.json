@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Experiment",
+  "description": "One evaluator run of one candidate. Produced by cspace.evaluator.evaluate_bundle.",
+  "type": "object",
+  "required": [
+    "id",
+    "candidate_id",
+    "bundle_hash",
+    "split",
+    "status",
+    "evaluator_version",
+    "task_hash",
+    "budget",
+    "seeds",
+    "checkpoints",
+    "costs",
+    "started",
+    "finished"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^e_[0-9a-f]{12}$"
+    },
+    "candidate_id": {
+      "type": "string"
+    },
+    "replay_of": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "bundle_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "files": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "split": {
+      "enum": [
+        "dev",
+        "confirm"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "invalid",
+        "diverged",
+        "timeout",
+        "oom",
+        "overheat",
+        "refused",
+        "error"
+      ]
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "evaluator_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "task_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "device": {
+      "type": "string"
+    },
+    "attention_backend": {
+      "enum": [
+        "default",
+        "cudnn",
+        "math"
+      ]
+    },
+    "budget": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "horizon_flops",
+        "checkpoint_fracs",
+        "eval_tokens"
+      ]
+    },
+    "seeds": {
+      "type": "object",
+      "required": [
+        "init",
+        "data"
+      ]
+    },
+    "recipe": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "checks": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "params": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "frac",
+          "flops",
+          "step",
+          "tokens",
+          "dev_loss",
+          "train_seconds"
+        ]
+      }
+    },
+    "loss_trace": {
+      "type": "array"
+    },
+    "final": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "costs": {
+      "type": "object"
+    },
+    "log_tail": {
+      "type": "string"
+    },
+    "started": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "finished": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "probes": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  }
+}
