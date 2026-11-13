@@ -1,10 +1,12 @@
-"""cspace: a research harness for transformational-creativity experiments.
+"""Research harness for transformational-creativity experiments (package name is a placeholder).
 
-Gate 1 components:
-  cspace.data       corpus preparation and deterministic token streams
-  cspace.evaluator  locked evaluator: lint, engineering checks, compute-capped training
-  cspace.archive    content-addressed artifact store, SQLite index, cost ledgers
-  cspace.box        K/C dependency-graph records (validation only, for Gate 2)
+  cspace.data         corpus preparation and deterministic token streams
+  cspace.evaluator    lint, engineering checks, FLOP-budgeted training, probes
+  cspace.archive      content-addressed artifact store, SQLite index, cost ledgers
+  cspace.box          dependency-graph (box) records
+  cspace.agents       research loop
+  cspace.calibration  Stage A cohort;  cspace.reporting / cspace.confirm  Stage B and confirmation
+  cspace.executor     where evaluations run
 """
 
 __version__ = "0.1.0"
