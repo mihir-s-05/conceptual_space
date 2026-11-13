@@ -2,19 +2,19 @@
 
 A confirmation evaluates frozen candidates from a campaign against the campaign's
 baseline at several training seeds (paired: candidate and baseline share each seed),
-on the dev split (replication of promising or ambiguous findings) or the sealed
-confirm split (final evaluation of development-selected incumbents).
+on the dev split (replicating promising or ambiguous findings) or the sealed confirm
+split (final evaluation of development-selected incumbents).
 
 Results live in archive/confirmations/<name>/ with their own archive, never in the
-campaign archive, so agents cannot see them. Candidates are fixed when the
-confirmation is created (`incumbent` resolves to the campaign's development
-incumbent at that moment) and the spec is frozen by hash.
+campaign archive, so agents cannot see them. Candidates are fixed at creation
+(`incumbent` resolves to the campaign's development incumbent at that moment) and
+the spec is frozen by hash.
 
-Per candidate: paired deltas d_s = loss(candidate, s) - loss(baseline, s), their
-mean, and a t-interval. The claim "reliably better by at least `threshold`" needs
-the upper bound of the interval on d to be <= -threshold, i.e. the lower bound on
-baseline-minus-candidate above the threshold. With k candidates the interval uses
-a Bonferroni-adjusted level (alpha / k) as the joint procedure.
+Per candidate: paired deltas d_s = loss(candidate, s) - loss(baseline, s), their mean,
+and a t-interval. "Reliably better by at least `threshold`" needs the interval's upper
+bound on d to be <= -threshold (equivalently, the lower bound on baseline minus
+candidate exceeds the threshold). With k candidates each interval is at level
+1 - alpha/k (Bonferroni), the joint procedure.
 """
 
 import json
@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 from .archive import Archive
-from .hashing import canonical_json, sha256_bytes
+from .frozen import apply_overrides, read_frozen, write_frozen
 from .paths import ARCHIVE_DIR
 
 CONFIRM_DIR = ARCHIVE_DIR / "confirmations"
@@ -44,34 +44,22 @@ DEFAULT_SPEC = dict(
 )
 
 
-class ConfirmError(RuntimeError):
-    pass
-
-
 # ---------------------------------------------------------------------------
-def _t_pdf(x, nu):
-    return math.exp(math.lgamma((nu + 1) / 2) - math.lgamma(nu / 2)) / math.sqrt(nu * math.pi) * \
-        (1 + x * x / nu) ** (-(nu + 1) / 2)
-
-
-def _t_cdf(x, nu, steps=4000):
-    if x == 0:
-        return 0.5
+# Student t without scipy: Simpson integration of the density plus bisection
+def _t_cdf(x, nu, steps=2000):
+    norm = math.exp(math.lgamma((nu + 1) / 2) - math.lgamma(nu / 2)) / math.sqrt(nu * math.pi)
+    pdf = lambda t: norm * (1 + t * t / nu) ** (-(nu + 1) / 2)
     h = abs(x) / steps
-    s = _t_pdf(0, nu) + _t_pdf(abs(x), nu) + sum((4 if i % 2 else 2) * _t_pdf(i * h, nu) for i in range(1, steps))
-    area = s * h / 3
-    return 0.5 + area if x > 0 else 0.5 - area
+    area = h / 3 * (pdf(0) + pdf(abs(x)) + sum((4 if i % 2 else 2) * pdf(i * h) for i in range(1, steps)))
+    return 0.5 + math.copysign(area, x)
 
 
 def t_quantile(p, nu):
-    """Inverse Student-t CDF by bisection (p in (0.5, 1))."""
+    """Inverse Student-t CDF for p in (0.5, 1)."""
     lo, hi = 0.0, 1000.0
-    for _ in range(80):
+    for _ in range(60):
         mid = (lo + hi) / 2
-        if _t_cdf(mid, nu) < p:
-            lo = mid
-        else:
-            hi = mid
+        lo, hi = (mid, hi) if _t_cdf(mid, nu) < p else (lo, mid)
     return (lo + hi) / 2
 
 
@@ -85,18 +73,26 @@ def paired_interval(deltas, alpha):
     return {"n": n, "mean": mean, "sd": sd, "lower": mean - half, "upper": mean + half, "level": 1 - alpha}
 
 
+def verdict(interval, threshold, complete):
+    if not complete:
+        return "incomplete"
+    if interval["upper"] is None:
+        return "single seed: no interval"
+    if interval["upper"] <= -threshold:
+        return "meets threshold"
+    if interval["lower"] >= 0:
+        return "worse than baseline"
+    return "not established"
+
+
 # ---------------------------------------------------------------------------
 class Confirmation:
     def __init__(self, name, root=None):
         self.name = name
         self.dir = Path(root or CONFIRM_DIR) / name
-        path = self.dir / "confirmation.json"
-        if not path.is_file():
+        if not (self.dir / "confirmation.json").is_file():
             raise FileNotFoundError(f"confirmation {name!r} not found in {self.dir.parent}")
-        stored = json.loads(path.read_text(encoding="utf-8"))
-        self.spec, self.spec_hash = stored["spec"], stored["spec_hash"]
-        if sha256_bytes(canonical_json(self.spec)) != self.spec_hash:
-            raise ConfirmError("confirmation.json was edited after creation; create a new confirmation")
+        self.spec, self.spec_hash = read_frozen(self.dir / "confirmation.json")
         self.archive = Archive(self.dir / "archive")
         self.db = self.archive.db
         self.db.executescript("CREATE TABLE IF NOT EXISTS runs (member TEXT NOT NULL, seed INTEGER NOT NULL, "
@@ -106,13 +102,7 @@ class Confirmation:
     def create(cls, name, root=None, **overrides):
         from .agents.campaign import Campaign
 
-        spec = json.loads(json.dumps(DEFAULT_SPEC))
-        for k, v in overrides.items():
-            if v is None:
-                continue
-            if k not in spec:
-                raise ValueError(f"unknown confirmation setting {k!r}")
-            spec[k] = v
+        spec = apply_overrides(DEFAULT_SPEC, overrides)
         if not spec["campaign"]:
             raise ValueError("specify the source campaign")
         if spec["split"] not in ("dev", "confirm"):
@@ -122,40 +112,37 @@ class Confirmation:
         d = Path(root or CONFIRM_DIR) / name
         if (d / "confirmation.json").exists():
             raise FileExistsError(f"confirmation {name!r} already exists")
-        camp = Campaign(spec["campaign"], root=spec["campaigns_root"])
-        try:
-            resolved = []
+        with Campaign(spec["campaign"], root=spec["campaigns_root"]) as camp:
+            candidates = []
             for c in spec["candidates"]:
                 cid = camp.incumbent() if c == "incumbent" else c
                 if camp.archive.get_candidate(cid) is None:
                     raise ValueError(f"candidate {cid} is not in campaign {spec['campaign']}")
                 if cid == camp.seed_id:
                     raise ValueError("the baseline is always included; do not list it as a candidate")
-                if cid not in resolved:
-                    resolved.append(cid)
-            spec["candidates"] = resolved
-            spec["baseline"] = camp.seed_id
-            spec["task"] = camp.config["task"]
-            spec["horizon_flops"] = spec["horizon_flops"] or camp.config["horizon_flops"]
-            spec["eval_tokens"] = spec["eval_tokens"] or camp.config["eval_tokens"]
-            spec["max_params"] = camp.config["max_params"]
-            d.mkdir(parents=True, exist_ok=True)
-            archive = Archive(d / "archive")
-            with tempfile.TemporaryDirectory(prefix="cspace_conf_") as tmp:
-                for cid in [spec["baseline"]] + resolved:
+                if cid not in candidates:
+                    candidates.append(cid)
+            cfg = camp.config
+            spec.update(candidates=candidates, baseline=camp.seed_id, task=cfg["task"], max_params=cfg["max_params"],
+                        horizon_flops=spec["horizon_flops"] or cfg["horizon_flops"],
+                        eval_tokens=spec["eval_tokens"] or cfg["eval_tokens"],
+                        created=time.strftime("%Y-%m-%dT%H:%M:%S"))
+            with Archive(d / "archive") as archive, tempfile.TemporaryDirectory(prefix="cspace_conf_") as tmp:
+                for cid in [camp.seed_id] + candidates:
                     bundle = camp.archive.materialize(camp.archive.get_candidate(cid)["bundle_hash"], Path(tmp) / cid)
-                    archive.add_candidate(bundle, action_mode="seed" if cid == spec["baseline"] else "manual",
+                    archive.add_candidate(bundle, action_mode="seed" if cid == camp.seed_id else "manual",
                                           notes=f"from campaign {spec['campaign']}")
-            archive.close()
-        finally:
-            camp.close()
-        spec["created"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-        (d / "confirmation.json").write_text(json.dumps({"spec": spec, "spec_hash": sha256_bytes(canonical_json(spec))},
-                                                        indent=2), encoding="utf-8")
+        write_frozen(d / "confirmation.json", spec)
         return cls(name, root)
 
     def close(self):
         self.archive.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     def members(self):
         return [self.spec["baseline"]] + list(self.spec["candidates"])
@@ -164,66 +151,52 @@ class Confirmation:
         row = self.db.execute("SELECT experiment_id FROM runs WHERE member = ? AND seed = ?", (member, seed)).fetchone()
         return self.archive.get_experiment(row["experiment_id"]) if row else None
 
-    def _request(self, member, seed, tmp):
-        cand = self.archive.get_candidate(member)
-        bundle = self.archive.materialize(cand["bundle_hash"], Path(tmp) / f"{member}_{seed}")
-        s = self.spec
-        return dict(bundle_dir=str(bundle), task_dir=s["task"], split=s["split"], allow_sealed=s["split"] == "confirm",
-                    budget=dict(horizon_flops=s["horizon_flops"], checkpoint_fracs=list(s["fracs"]),
-                                eval_tokens=s["eval_tokens"]),
-                    seeds={"init": seed, "data": seed}, device=s["device"], time_limit_s=s["eval_time_limit_s"],
-                    max_params=int(s["max_params"]), throttle=s["throttle"], temp_limit_c=s["temp_limit_c"])
-
     def run(self, log=print):
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        from .executor import get_executor
+        from .executor import build_request, get_executor
 
-        ex = get_executor(self.spec.get("executor"))
-        todo = [(m, s) for s in self.spec["seeds"] for m in self.members() if self.run_of(m, s) is None]
-        with tempfile.TemporaryDirectory(prefix="cspace_conf_run_") as tmp, \
-                ThreadPoolExecutor(max_workers=max(1, min(ex.slots, len(todo) or 1))) as pool:
-            futures = {pool.submit(ex.run, self._request(m, s, tmp), self.spec["eval_time_limit_s"] + 600): (m, s)
-                       for m, s in todo}
-            for f in as_completed(futures):
-                m, s = futures[f]
-                rec = self.archive.add_experiment(f.result(), m, purpose=f"confirmation {self.spec['split']} seed {s}")
+        s = self.spec
+        budget = dict(horizon_flops=s["horizon_flops"], checkpoint_fracs=list(s["fracs"]), eval_tokens=s["eval_tokens"])
+        with tempfile.TemporaryDirectory(prefix="cspace_conf_run_") as tmp:
+            jobs = []
+            for seed in s["seeds"]:
+                for member in self.members():
+                    if self.run_of(member, seed) is None:
+                        bundle = self.archive.materialize(self.archive.get_candidate(member)["bundle_hash"],
+                                                          Path(tmp) / f"{member}_{seed}")
+                        jobs.append(((member, seed), build_request(
+                            bundle, s["task"], s, budget, {"init": seed, "data": seed}, split=s["split"],
+                            allow_sealed=s["split"] == "confirm")))
+
+            def record(key, result):
+                member, seed = key
+                rec = self.archive.add_experiment(result, member, purpose=f"confirmation {s['split']} seed {seed}")
                 with self.db:
-                    self.db.execute("INSERT INTO runs VALUES (?, ?, ?)", (m, s, rec["id"]))
-                log(f"  {m} seed {s}: {rec['status']}" + (f", loss {rec['final']['loss']:.4f}" if rec.get("final") else ""))
+                    self.db.execute("INSERT INTO runs VALUES (?, ?, ?)", (member, seed, rec["id"]))
+                log(f"  {member} seed {seed}: {rec['status']}"
+                    + (f", loss {rec['final']['loss']:.4f}" if rec.get("final") else ""))
+
+            get_executor(s["executor"]).run_all(jobs, record)
         return self.report(log=log)
+
+    def _candidate_result(self, cid, alpha):
+        s = self.spec
+        per_seed, failed = [], []
+        for seed in s["seeds"]:
+            c, b = self.run_of(cid, seed), self.run_of(s["baseline"], seed)
+            if c is None or b is None or c["status"] != "ok" or b["status"] != "ok":
+                failed.append({"seed": seed, "candidate": c and c["status"], "baseline": b and b["status"]})
+                continue
+            per_seed.append({"seed": seed, "candidate": c["final"]["loss"], "baseline": b["final"]["loss"],
+                             "delta": c["final"]["loss"] - b["final"]["loss"]})
+        interval = paired_interval([p["delta"] for p in per_seed], alpha)
+        return {"candidate_id": cid, "per_seed": per_seed, "failed": failed, "interval": interval,
+                "verdict": verdict(interval, s["threshold"], complete=not failed)}
 
     def report(self, log=print):
         s = self.spec
         k = max(1, len(s["candidates"]))
         alpha = s["alpha"] / k
-        rows = []
-        for cid in s["candidates"]:
-            deltas, per_seed, failed = [], [], []
-            for seed in s["seeds"]:
-                c, b = self.run_of(cid, seed), self.run_of(s["baseline"], seed)
-                if c is None or b is None:
-                    failed.append({"seed": seed, "status": "missing"})
-                    continue
-                if c["status"] != "ok" or b["status"] != "ok":
-                    failed.append({"seed": seed, "status": f"candidate {c['status']}, baseline {b['status']}"})
-                    continue
-                d = c["final"]["loss"] - b["final"]["loss"]
-                deltas.append(d)
-                per_seed.append({"seed": seed, "candidate": c["final"]["loss"], "baseline": b["final"]["loss"],
-                                 "delta": d})
-            iv = paired_interval(deltas, alpha)
-            if failed:
-                verdict = "incomplete"
-            elif iv["upper"] is None:
-                verdict = "single seed: no interval"
-            elif iv["upper"] <= -s["threshold"]:
-                verdict = "meets threshold"
-            elif iv["lower"] >= 0:
-                verdict = "worse than baseline"
-            else:
-                verdict = "not established"
-            rows.append({"candidate_id": cid, "per_seed": per_seed, "failed": failed, "interval": iv,
-                         "verdict": verdict})
+        rows = [self._candidate_result(cid, alpha) for cid in s["candidates"]]
         rep = {"confirmation": self.name, "spec_hash": self.spec_hash, "split": s["split"], "campaign": s["campaign"],
                "seeds": s["seeds"], "frac": max(s["fracs"]), "threshold": s["threshold"],
                "joint_procedure": f"Bonferroni over {k} candidate(s): each interval at level {1 - alpha:.4f}",
@@ -233,7 +206,7 @@ class Confirmation:
         lines = [f"# Confirmation `{self.name}` ({s['split']} split, campaign `{s['campaign']}`)", "",
                  f"Paired seeds {s['seeds']} at {max(s['fracs']):g} of a {s['horizon_flops']:.3g}-FLOP horizon. "
                  f"delta = candidate - baseline loss (negative is better). {rep['joint_procedure']}. "
-                 f"Claim requires upper bound <= -{s['threshold']}.", "",
+                 f"A claim requires upper bound <= -{s['threshold']}.", "",
                  "| candidate | n | mean delta | sd | interval | verdict |", "| --- | --- | --- | --- | --- | --- |"]
         for r in rows:
             iv = r["interval"]

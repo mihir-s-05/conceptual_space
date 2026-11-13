@@ -22,6 +22,7 @@ from pathlib import Path
 from ..archive import Archive
 from ..hashing import canonical_json, sha256_bytes
 from ..paths import ARCHIVE_DIR, ROOT, SEEDS_DIR
+from ..results import by_frac, first_line
 from ..task import load_task
 from .space_ops import render_flat, space_id
 
@@ -120,16 +121,13 @@ class Campaign:
     # ---- creation ----------------------------------------------------------
     @classmethod
     def create(cls, name, root=None, **overrides):
-        cfg = {**DEFAULT_CONFIG, **{k: v for k, v in overrides.items() if v is not None}}
+        from ..frozen import apply_overrides
+        from ..task import default_task_dir
+
+        cfg = apply_overrides(DEFAULT_CONFIG, overrides)
         if cfg["condition"] not in ("dag", "flat"):
             raise ValueError("condition must be 'dag' or 'flat'")
-        if cfg["task"] is None:
-            from ..paths import DATA_DIR
-
-            tasks = sorted(p.parent for p in DATA_DIR.glob("*/task.json"))
-            if len(tasks) != 1:
-                raise ValueError(f"specify task (found {len(tasks)} under {DATA_DIR})")
-            cfg["task"] = str(tasks[0])
+        cfg["task"] = cfg["task"] or str(default_task_dir())
         d = Path(root or CAMPAIGNS_DIR) / name
         if (d / "campaign.json").exists():
             raise FileExistsError(f"campaign {name!r} already exists")
@@ -158,6 +156,12 @@ class Campaign:
 
     def close(self):
         self.archive.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     # ---- small helpers -----------------------------------------------------
     def _meta_get(self, key, default=None):
@@ -221,18 +225,17 @@ class Campaign:
         return get_executor(self.config.get("executor"))
 
     def evaluate(self, candidate_id, purpose, log=print):
+        from ..executor import build_request
+
         cand = self.archive.get_candidate(candidate_id)
         with tempfile.TemporaryDirectory(prefix="cspace_bundle_") as tmp:
             bundle = self.archive.materialize(cand["bundle_hash"], tmp)
-            request = dict(bundle_dir=str(bundle), task_dir=self.config["task"], split="dev", budget=self.budget,
-                           seeds=self.config["seeds"], device=self.config.get("device", "auto"),
-                           time_limit_s=self.config["eval_time_limit_s"], max_params=int(self.config["max_params"]),
-                           throttle=self.config.get("throttle", 0.0), temp_limit_c=self.config.get("temp_limit_c"))
-            result = self.executor.run(request, timeout_s=self.config["eval_time_limit_s"] + 600)
+            result = self.executor.run(build_request(bundle, self.config["task"], self.config, self.budget,
+                                                     self.config["seeds"]))
         record = self.archive.add_experiment(result, candidate_id, purpose=purpose)
         log(f"    {candidate_id}: {record['status']}"
             + (f", dev loss {record['checkpoints'][-1]['dev_loss']:.4f}" if record.get("checkpoints") else "")
-            + (f" ({(record.get('error') or '').splitlines()[0][:120]})" if record["status"] != "ok" else ""))
+            + (f" ({first_line(record.get('error'))})" if record["status"] != "ok" else ""))
         return record
 
     def control(self, log=print):
@@ -259,7 +262,7 @@ class Campaign:
     def summarize(self, record, ablation=None):
         """Observation summary of a smoke experiment relative to the control."""
         control = self.control()
-        base = {round(c["frac"], 6): c["dev_loss"] for c in control["checkpoints"]}
+        base = {f: c["dev_loss"] for f, c in by_frac(control).items()}
 
         def one(r):
             out = {"candidate_id": r["candidate_id"], "status": r["status"]}

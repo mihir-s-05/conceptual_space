@@ -86,7 +86,6 @@ def descendants(space: dict, node_id: str) -> set:
 
 def render_markdown(space: dict) -> str:
     """Human-readable dossier of a space, grouped by node role."""
-    by_id = {n["id"]: n for n in space["nodes"]}
     users = {}
     for prereq, dependent in edges(space):
         users.setdefault(prereq, []).append(dependent)

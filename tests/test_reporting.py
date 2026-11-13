@@ -13,7 +13,7 @@ from cspace.executor import (Executor, get_executor, normalize_spec, pack_reques
                              unpack_request)
 from cspace.reporting import CampaignReport, compare
 
-from conftest import make_tiny_task, write_bundle, tiny_baseline_source
+from conftest import make_tiny_task
 from test_agents import BOX, make_script
 
 BUDGET = dict(horizon_flops=4e9, checkpoint_fracs=[0.5, 1.0], eval_tokens=4096)
@@ -67,8 +67,9 @@ def test_executor_slots_bound_concurrency():
 
     ex = get_executor({"kind": "sleepy_test", "slots": 2})
     assert get_executor({"kind": "sleepy_test", "slots": 2}) is ex  # shared per spec
-    out = ex.map([{"i": i} for i in range(6)], timeout_s=10)
-    assert [r["i"] for r in out] == list(range(6)) and state["max"] == 2
+    out = {}
+    ex.run_all([(i, {"i": i}) for i in range(6)], lambda key, result: out.update({key: result["i"]}))
+    assert out == {i: i for i in range(6)} and state["max"] == 2
     with pytest.raises(ValueError):
         normalize_spec({"kind": "no_such_backend"})
 

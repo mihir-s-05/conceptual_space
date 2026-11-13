@@ -8,6 +8,7 @@ import pytest
 
 from cspace.agents.campaign import Campaign
 from cspace.calibration import Cohort, CohortError, screen_decision, spearman, usefulness_label
+from cspace.frozen import FrozenSpecError
 from cspace.evaluator.evaluate import evaluate_bundle
 from cspace.evaluator.pacing import Pacer
 
@@ -169,5 +170,5 @@ def test_cohort_end_to_end(tmp_path, tiny_task, tiny_baseline, source_campaign):
     stored = json.loads(spec_path.read_text())
     stored["spec"]["cap"] = 99
     spec_path.write_text(json.dumps(stored))
-    with pytest.raises(CohortError):
+    with pytest.raises(FrozenSpecError):
         Cohort("c", root=tmp_path / "cohorts")

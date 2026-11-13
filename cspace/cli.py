@@ -10,19 +10,22 @@ from pathlib import Path
 
 os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")  # must precede CUDA init
 
-from .paths import ARCHIVE_DIR, DATA_DIR, SEEDS_DIR  # noqa: E402
+from .paths import DATA_DIR, SEEDS_DIR  # noqa: E402
 
 BASELINE_DIR = SEEDS_DIR / "baseline_decoder"
 
 
 def _default_task_dir():
-    tasks = sorted(p.parent for p in DATA_DIR.glob("*/task.json")) if DATA_DIR.exists() else []
-    if len(tasks) == 1:
-        return tasks[0]
-    sys.exit(f"specify --task (found {len(tasks)} task directories under {DATA_DIR})")
+    from .task import default_task_dir
+
+    try:
+        return default_task_dir()
+    except ValueError as e:
+        sys.exit(f"{e}; pass --task")
 
 
 def _executor_spec(args):
+    """Executor spec from --executor (kind or JSON) and --slots; None keeps the default."""
     if not args.executor and not args.slots:
         return None
     spec = (json.loads(args.executor) if args.executor and args.executor.startswith("{")
@@ -32,6 +35,12 @@ def _executor_spec(args):
     from .executor import normalize_spec
 
     return normalize_spec(spec)
+
+
+def _hardware(args):
+    """device / throttle / temp_limit_c / executor settings given on the command line."""
+    return dict(device=args.device, throttle=args.throttle, temp_limit_c=args.temp_limit,
+                executor=_executor_spec(args))
 
 
 def _fracs(text):
@@ -46,6 +55,29 @@ def cmd_prepare_data(args):
     prepare(args.corpus, out, train_docs=args.train_docs, heldout_docs=args.heldout_docs,
             vocab_size=args.vocab, context_length=args.context, batch_size=args.batch,
             tokenizer_docs=args.tokenizer_docs)
+
+
+def _seconds_per_step(model, opt, x, y, ctx, steps, device, warmup=5):
+    """Mean wall-clock seconds of an optimizer step after `warmup` untimed steps."""
+    import torch
+
+    def step():
+        with ctx():
+            logits = model(x)
+            loss = torch.nn.functional.cross_entropy(logits.float().reshape(-1, logits.size(-1)), y.reshape(-1))
+        loss.backward()
+        opt.step()
+        opt.zero_grad(set_to_none=True)
+
+    sync = torch.cuda.synchronize if device.type == "cuda" else (lambda: None)
+    for _ in range(warmup):
+        step()
+    sync()
+    t0 = time.perf_counter()
+    for _ in range(steps):
+        step()
+    sync()
+    return (time.perf_counter() - t0) / steps
 
 
 def cmd_profile(args):
@@ -79,24 +111,7 @@ def cmd_profile(args):
             torch.cuda.reset_peak_memory_stats(device)
         flops = measure_step_flops(model, x, y, ctx)
 
-        def step():
-            with ctx():
-                logits = model(x)
-                loss = torch.nn.functional.cross_entropy(logits.float().reshape(-1, V), y.reshape(-1))
-            loss.backward()
-            opt.step()
-            opt.zero_grad(set_to_none=True)
-
-        for _ in range(5):
-            step()
-        if device.type == "cuda":
-            torch.cuda.synchronize()
-        t0 = time.perf_counter()
-        for _ in range(args.steps):
-            step()
-        if device.type == "cuda":
-            torch.cuda.synchronize()
-        dt = (time.perf_counter() - t0) / args.steps
+        dt = _seconds_per_step(model, opt, x, y, ctx, args.steps, device)
         tok_s = B * T / dt
         tflops = flops / dt / 1e12
         minutes = 20 * params["total"] / tok_s / 60
@@ -152,14 +167,9 @@ def _run_evaluation(bundle_dir, task_dir, split, budget, seeds, args):
         from .evaluator.evaluate import evaluate_bundle
 
         return evaluate_bundle(**request)
-    if args.executor and args.executor != "local":
-        from .executor import get_executor
+    from .executor import get_executor
 
-        return get_executor(json.loads(args.executor) if args.executor.startswith("{") else args.executor).run(
-            request, timeout_s=args.time_limit + 600)
-    from .evaluator.runner import run_isolated
-
-    return run_isolated(request, timeout_s=args.time_limit + 600)
+    return get_executor(_executor_spec(args) or {"kind": "local", "stream": True}).run(request)
 
 
 def _summarize(result):
@@ -273,106 +283,88 @@ def cmd_llm_ping(args):
 def cmd_campaign_init(args):
     from .agents.campaign import Campaign
 
-    camp = Campaign.create(args.name, condition=args.condition, model=args.model, reasoning_effort=args.effort,
-                           box=args.box, task=args.task, horizon_flops=args.horizon_flops,
-                           smoke_fracs=list(_fracs(args.smoke_fracs)) if args.smoke_fracs else None,
-                           max_turns=args.max_turns, device=args.device, throttle=args.throttle,
-                           temp_limit_c=args.temp_limit, executor=_executor_spec(args),
-                           parallel_jobs=args.parallel_jobs)
-    print(f"created campaign {args.name} in {camp.dir}")
-    print(json.dumps(camp.config, indent=2))
-    camp.close()
+    with Campaign.create(args.name, condition=args.condition, model=args.model, reasoning_effort=args.effort,
+                         box=args.box, task=args.task, horizon_flops=args.horizon_flops,
+                         smoke_fracs=list(_fracs(args.smoke_fracs)) if args.smoke_fracs else None,
+                         max_turns=args.max_turns, parallel_jobs=args.parallel_jobs, **_hardware(args)) as camp:
+        print(f"created campaign {args.name} in {camp.dir}")
+        print(json.dumps(camp.config, indent=2))
 
 
 def cmd_campaign_run(args):
     from .agents.campaign import Campaign
 
-    camp = Campaign(args.name)
-    llm = _llm(camp.config["model"], camp.config.get("reasoning_effort"))
-    try:
-        camp.run(args.waves, llm)
-    finally:
-        camp.close()
+    with Campaign(args.name) as camp:
+        camp.run(args.waves, _llm(camp.config["model"], camp.config.get("reasoning_effort")))
 
 
 def cmd_campaign_status(args):
     from .agents.campaign import Campaign
 
-    camp = Campaign(args.name)
-    cfg = camp.config
-    print(f"campaign {args.name}: condition {cfg['condition']}, model {cfg['model']}, next wave {camp._meta_get('next_wave')}")
-    ctl = camp._meta_get("control_experiment_id")
-    if ctl:
-        c = camp.archive.get_experiment(ctl)
-        print("baseline control: " + ", ".join(f"@{k['frac']:g} {k['dev_loss']:.4f}" for k in c["checkpoints"]))
-    for job in camp.jobs():
-        p = job["plan"]
-        s = job.get("summary") or {}
-        cks = s.get("checkpoints") or []
-        delta = f"delta {cks[-1]['delta_vs_baseline']:+.4f}" if cks else "-"
-        refl = job.get("reflection") or {}
-        print(f"  {p['id']} {p['mode']:<14} parent={p['research_parent_id'] or '-':<18} {job['status']:<22} "
-              f"{job.get('final_candidate_id') or '-':<18} {job.get('change_type') or '-':<18} {delta:<14} "
-              f"{refl.get('evidence_class') or '-'}")
-    try:
-        print(f"incumbent: {camp.incumbent()}")
-    except ValueError:
-        pass
-    for row in camp.archive.ledger_summary():
-        print(f"  ledger {row['ledger']:<14}{row['unit']:<20}{row['total']:>16,.6g}")
-    camp.close()
+    with Campaign(args.name) as camp:
+        cfg = camp.config
+        print(f"campaign {args.name}: condition {cfg['condition']}, model {cfg['model']}, "
+              f"next wave {camp._meta_get('next_wave')}")
+        ctl = camp._meta_get("control_experiment_id")
+        if ctl:
+            c = camp.archive.get_experiment(ctl)
+            print("baseline control: " + ", ".join(f"@{k['frac']:g} {k['dev_loss']:.4f}" for k in c["checkpoints"]))
+        for job in camp.jobs():
+            p = job["plan"]
+            cks = (job.get("summary") or {}).get("checkpoints") or []
+            delta = f"delta {cks[-1]['delta_vs_baseline']:+.4f}" if cks else "-"
+            evidence = (job.get("reflection") or {}).get("evidence_class") or "-"
+            print(f"  {p['id']} {p['mode']:<14} parent={p['research_parent_id'] or '-':<18} {job['status']:<22} "
+                  f"{job.get('final_candidate_id') or '-':<18} {job.get('change_type') or '-':<18} {delta:<14} "
+                  f"{evidence}")
+        if camp.valid_states():
+            print(f"incumbent: {camp.incumbent()}")
+        for row in camp.archive.ledger_summary():
+            print(f"  ledger {row['ledger']:<14}{row['unit']:<20}{row['total']:>16,.6g}")
 
 
 def cmd_campaign_job(args):
     from .agents.campaign import Campaign
 
-    camp = Campaign(args.name)
-    job = next((j for j in camp.jobs() if j["plan"]["id"] == args.job), None)
-    if job is None:
-        sys.exit(f"unknown job {args.job}")
-    if args.transcript and job.get("transcript"):
-        for m in json.loads(camp.archive.get_bytes(job["transcript"])):
-            body = m.get("content") or json.dumps(m.get("tool_calls"), indent=1)
-            print(f"--- {m['role']}\n{body}\n")
-    else:
-        print(json.dumps(job, indent=1))
-    camp.close()
+    with Campaign(args.name) as camp:
+        job = next((j for j in camp.jobs() if j["plan"]["id"] == args.job), None)
+        if job is None:
+            sys.exit(f"unknown job {args.job}")
+        if args.transcript and job.get("transcript"):
+            for m in json.loads(camp.archive.get_bytes(job["transcript"])):
+                body = m.get("content") or json.dumps(m.get("tool_calls"), indent=1)
+                print(f"--- {m['role']}\n{body}\n")
+        else:
+            print(json.dumps(job, indent=1))
 
 
 def cmd_cohort_init(args):
     from .calibration import Cohort
 
     overrides = dict(sources=args.source or [], cap=args.cap, reform_quota=args.reform_quota, task=args.task,
-                     horizon_flops=args.horizon_flops, device=args.device, throttle=args.throttle,
-                     temp_limit_c=args.temp_limit, executor=_executor_spec(args),
+                     horizon_flops=args.horizon_flops, **_hardware(args),
                      smoke_fracs=list(_fracs(args.smoke_fracs)) if args.smoke_fracs else None,
                      long_fracs=list(_fracs(args.long_fracs)) if args.long_fracs else None)
     if args.controls is not None:
         overrides["controls"] = [c for c in args.controls.split(",") if c]
     if args.overrides:
         overrides["stratum_overrides"] = json.loads(Path(args.overrides).read_text(encoding="utf-8"))
-    coh = Cohort.create(args.name, **overrides)
-    print(f"created cohort {args.name} in {coh.dir} (spec frozen, hash {coh.spec_hash[:12]})")
-    print(json.dumps(coh.spec, indent=2))
-    coh.close()
+    with Cohort.create(args.name, **overrides) as coh:
+        print(f"created cohort {args.name} in {coh.dir} (spec frozen, hash {coh.spec_hash[:12]})")
+        print(json.dumps(coh.spec, indent=2))
 
 
 def cmd_cohort(args):
     from .calibration import Cohort
 
-    coh = Cohort(args.name)
-    try:
+    with Cohort(args.name) as coh:
         if args.cohort_command == "status":
             print(coh.status())
-        elif args.cohort_command == "run":
-            coh.run(until=args.until)
         elif args.cohort_command == "report":
             coh.report()
             print((coh.dir / "report.md").read_text(encoding="utf-8"))
-        else:
-            coh.run(until=args.cohort_command)
-    finally:
-        coh.close()
+        else:  # "run" goes up to --until; a phase name runs up to that phase
+            coh.run(until=args.until if args.cohort_command == "run" else args.cohort_command)
 
 
 def cmd_campaign_report(args):
@@ -399,21 +391,18 @@ def cmd_confirm(args):
     from .confirm import Confirmation
 
     if args.confirm_command == "init":
-        conf = Confirmation.create(
-            args.name, campaign=args.campaign, candidates=args.candidate or None, split=args.split,
-            seeds=[int(s) for s in args.seeds.split(",")] if args.seeds else None,
-            fracs=list(_fracs(args.fracs)) if args.fracs else None, threshold=args.threshold,
-            device=args.device, throttle=args.throttle, temp_limit_c=args.temp_limit, executor=_executor_spec(args))
-        print(f"created confirmation {args.name} (spec {conf.spec_hash[:12]}): candidates {conf.spec['candidates']}, "
-              f"baseline {conf.spec['baseline']}, split {conf.spec['split']}, seeds {conf.spec['seeds']}")
-        conf.close()
+        with Confirmation.create(
+                args.name, campaign=args.campaign, candidates=args.candidate or None, split=args.split,
+                seeds=[int(x) for x in args.seeds.split(",")] if args.seeds else None,
+                fracs=list(_fracs(args.fracs)) if args.fracs else None, threshold=args.threshold,
+                **_hardware(args)) as conf:
+            print(f"created confirmation {args.name} (spec {conf.spec_hash[:12]}): candidates "
+                  f"{conf.spec['candidates']}, baseline {conf.spec['baseline']}, split {conf.spec['split']}, "
+                  f"seeds {conf.spec['seeds']}")
         return
-    conf = Confirmation(args.name)
-    try:
+    with Confirmation(args.name) as conf:
         conf.run() if args.confirm_command == "run" else conf.report()
         print((conf.dir / "report.md").read_text(encoding="utf-8"))
-    finally:
-        conf.close()
 
 
 def cmd_box(args):
@@ -444,6 +433,15 @@ def cmd_freeze_evaluator(args):
 
 # ---------------------------------------------------------------------------
 def main(argv=None):
+    def add_hardware_args(s, device=None, throttle=None):
+        s.add_argument("--device", choices=["auto", "cuda", "cpu"], default=device)
+        s.add_argument("--throttle", type=float, default=throttle,
+                       help="fraction of wall-clock the GPU idles between steps, e.g. 0.5 (results unchanged)")
+        s.add_argument("--temp-limit", type=int, help="pause training while the GPU is at or above this temperature (C)")
+        s.add_argument("--executor", help="executor kind or JSON spec, e.g. local, loopback, "
+                                          "'{\"kind\": \"modal\", \"slots\": 4}'")
+        s.add_argument("--slots", type=int, help="concurrent evaluations through the executor")
+
     p = argparse.ArgumentParser(prog="cspace", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
 
@@ -476,13 +474,9 @@ def main(argv=None):
 
     def add_run_args(s):
         s.add_argument("--task")
-        s.add_argument("--device", default="auto")
         s.add_argument("--time-limit", type=float, default=3600.0, help="graceful limit in seconds")
         s.add_argument("--no-isolate", action="store_true", help="run in-process (debugging)")
-        s.add_argument("--executor", help="executor kind or JSON spec (default local), e.g. loopback")
-        s.add_argument("--throttle", type=float, default=0.0,
-                       help="fraction of wall-clock the GPU idles between steps, e.g. 0.5 (results unchanged)")
-        s.add_argument("--temp-limit", type=int, help="pause training while the GPU is at or above this temperature (C)")
+        add_hardware_args(s, device="auto", throttle=0.0)
 
     s = sub.add_parser("evaluate", help="evaluate an archived candidate or a bundle directory")
     g = s.add_mutually_exclusive_group(required=True)
@@ -543,11 +537,7 @@ def main(argv=None):
     c.add_argument("--horizon-flops", type=float)
     c.add_argument("--smoke-fracs", help="comma-separated fractions of the horizon")
     c.add_argument("--max-turns", type=int)
-    c.add_argument("--device", choices=["auto", "cuda", "cpu"])
-    c.add_argument("--throttle", type=float, help="GPU idle fraction between steps, e.g. 0.5")
-    c.add_argument("--temp-limit", type=int, help="pause training at this GPU temperature (C)")
-    c.add_argument("--executor", help="executor kind or JSON spec, e.g. local or '{\"kind\": \"modal\", \"slots\": 4}'")
-    c.add_argument("--slots", type=int, help="concurrent evaluations through the executor")
+    add_hardware_args(c)
     c.add_argument("--parallel-jobs", type=int, help="jobs of a wave run concurrently (default 1)")
     c.set_defaults(func=cmd_campaign_init)
     c = csub.add_parser("run", help="run waves (resumes where it stopped)")
@@ -587,11 +577,7 @@ def main(argv=None):
     c.add_argument("--seeds", help="comma-separated seeds, e.g. 1,2,3")
     c.add_argument("--fracs", help="checkpoints as fractions of the campaign horizon (last is analysed)")
     c.add_argument("--threshold", type=float, help="practical improvement threshold (nats)")
-    c.add_argument("--device", choices=["auto", "cuda", "cpu"])
-    c.add_argument("--throttle", type=float)
-    c.add_argument("--temp-limit", type=int)
-    c.add_argument("--executor")
-    c.add_argument("--slots", type=int)
+    add_hardware_args(c)
     c.set_defaults(func=cmd_confirm)
     for name in ("run", "report"):
         c = fsub.add_parser(name, help="run missing evaluations and report" if name == "run" else "report only")
@@ -611,11 +597,7 @@ def main(argv=None):
     c.add_argument("--horizon-flops", type=float)
     c.add_argument("--smoke-fracs", help="b1,b2")
     c.add_argument("--long-fracs", help="checkpoints of the long run, ending at 1")
-    c.add_argument("--device", choices=["auto", "cuda", "cpu"])
-    c.add_argument("--throttle", type=float, help="GPU idle fraction between steps, e.g. 0.5")
-    c.add_argument("--temp-limit", type=int, help="pause training at this GPU temperature (C)")
-    c.add_argument("--executor", help="executor kind or JSON spec, e.g. local or '{\"kind\": \"modal\", \"slots\": 4}'")
-    c.add_argument("--slots", type=int, help="concurrent evaluations through the executor")
+    add_hardware_args(c)
     c.set_defaults(func=cmd_cohort_init)
     for name, text in (("enroll", "enroll members by the frozen outcome-blind rule"),
                        ("smoke", "run smoke tests for every member and the baseline"),

@@ -33,6 +33,7 @@ import time
 from pathlib import Path
 
 from .paths import ARCHIVE_DIR
+from .results import by_frac
 
 STUDIES_DIR = ARCHIVE_DIR / "studies"
 CATEGORY = {"ordinary_tuning": "ordinary exploration", "component_switch": "known-space switch",
@@ -65,10 +66,6 @@ def failure_kind(exp):
     return status
 
 
-def _checkpoint_map(exp):
-    return {round(c["frac"], 6): c for c in (exp or {}).get("checkpoints") or []}
-
-
 def _probe_summary(probes):
     """Two scalars per run: copy gain at the longest delay, loss in the last position bucket."""
     if not probes or "copy" not in probes:
@@ -90,7 +87,7 @@ class CampaignReport:
         self.cfg = camp.config
         self.condition = self.cfg["condition"]
         self.control = camp.control(log=lambda m: None)
-        self.base = _checkpoint_map(self.control)
+        self.base = by_frac(self.control)
         self.common = round(max(self.cfg["smoke_fracs"]), 6)   # common training-compute checkpoint
         self.base_probes = _probe_summary(self.control.get("probes"))
         self.jobs = [j for j in camp.jobs() if j["status"] != "planned"]
@@ -109,7 +106,7 @@ class CampaignReport:
 
     def candidate_row(self, job, cid, role, attempt):
         exp = self.c.archive.get_experiment(job["experiments"].get(cid)) if job["experiments"].get(cid) else None
-        cks = _checkpoint_map(exp)
+        cks = by_frac(exp)
         deltas = {f"{f:g}": _sub(c["dev_loss"], self.base[f]["dev_loss"]) for f, c in cks.items() if f in self.base}
         costs = (exp or {}).get("costs") or {}
         last = (exp or {}).get("checkpoints", [{}])[-1] if (exp or {}).get("checkpoints") else {}
@@ -132,7 +129,7 @@ class CampaignReport:
             "device": (exp or {}).get("device"),
             "copy_gain_delta": _sub((probes or {}).get("copy_gain"), bp.get("copy_gain")),
             "late_position_loss_delta": _sub((probes or {}).get("late_position_loss"), bp.get("late_position_loss")),
-            "experiment_id": (exp or {}).get("id"),
+            "experiment_id": (exp or {}).get("id"), "evaluator_version": (exp or {}).get("evaluator_version"),
         }
 
     def ledger(self):
@@ -386,11 +383,8 @@ def _write_csv(path, rows, exclude=()):
 def report_campaign(name, root=None, delta=0.02):
     from .agents.campaign import Campaign
 
-    camp = Campaign(name, root=root)
-    try:
+    with Campaign(name, root=root) as camp:
         return CampaignReport(camp).write(delta=delta)
-    finally:
-        camp.close()
 
 
 # ---------------------------------------------------------------------------
@@ -437,16 +431,12 @@ def compare(study, pairs, campaigns_root=None, out_root=None, delta=0.02, seed=0
     for i, (dag_name, flat_name) in enumerate(pairs, 1):
         arms = {}
         for arm, name in (("dag", dag_name), ("flat", flat_name)):
-            camp = Campaign(name, root=campaigns_root)
-            try:
+            with Campaign(name, root=campaigns_root) as camp:
                 rep = CampaignReport(camp).write(delta=delta)
                 arms[arm] = {"name": name, "config": camp.config, "summary": rep["summary"]}
-                evaluators |= {camp.archive.get_experiment(r["experiment_id"])["evaluator_version"]
-                               for r in rep["ledger"] if r["experiment_id"]}
+                evaluators |= {r["evaluator_version"] for r in rep["ledger"] if r["evaluator_version"]}
                 for n in rep["neutral"]:
                     all_cards.append({"pair": i, "arm": arm, "campaign": name, **n})
-            finally:
-                camp.close()
         problems = check_match(arms["dag"]["config"], arms["flat"]["config"])
         ws = (arms["dag"]["summary"]["waves_completed"], arms["flat"]["summary"]["waves_completed"])
         if ws[0] != ws[1]:

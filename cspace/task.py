@@ -65,3 +65,13 @@ def load_task(task_dir) -> Task:
     root = Path(task_dir)
     spec = json.loads((root / "task.json").read_text(encoding="utf-8"))
     return Task(root=root, spec=spec)
+
+
+def default_task_dir() -> Path:
+    """The only prepared task under data/ (raises if there are none or several)."""
+    from .paths import DATA_DIR
+
+    tasks = sorted(p.parent for p in DATA_DIR.glob("*/task.json")) if DATA_DIR.exists() else []
+    if len(tasks) != 1:
+        raise ValueError(f"specify a task directory (found {len(tasks)} under {DATA_DIR})")
+    return tasks[0]

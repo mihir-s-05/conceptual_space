@@ -6,7 +6,8 @@ request is a small JSON-able dict (bundle directory, task directory, split, budg
 seeds, device, limits); the result is the evaluator's JSON result.
 
     executor = get_executor({"kind": "local", "slots": 1})
-    result = executor.run(request, timeout_s=...)          # thread-safe, blocks
+    result = executor.run(request)                          # thread-safe, blocks
+    executor.run_all([(key, request), ...], on_result)      # concurrent, callback on caller's thread
 
 `slots` bounds how many evaluations run at once through one executor; callers may
 submit from many threads (parallel wave jobs, cohort members) and the executor
@@ -46,6 +47,17 @@ from .hashing import bundle_hash, bundle_manifest
 _REGISTRY = {}
 _INSTANCES = {}
 _LOCK = threading.Lock()
+TIMEOUT_GRACE_S = 600  # hard timeout = the evaluator's own time limit + this
+
+
+def build_request(bundle_dir, task_dir, settings: dict, budget: dict, seeds: dict, split="dev",
+                  allow_sealed=False) -> dict:
+    """Evaluation request from a campaign/cohort/confirmation settings dict (device, throttle,
+    temp_limit_c, eval_time_limit_s, max_params)."""
+    return dict(bundle_dir=str(bundle_dir), task_dir=str(task_dir), split=split, allow_sealed=allow_sealed,
+                budget=budget, seeds=seeds, device=settings.get("device", "auto"),
+                time_limit_s=settings["eval_time_limit_s"], max_params=int(settings["max_params"]),
+                throttle=settings.get("throttle", 0.0), temp_limit_c=settings.get("temp_limit_c"))
 
 
 def register_executor(cls):
@@ -90,8 +102,9 @@ class Executor:
     def describe(self) -> dict:
         return {"kind": self.kind, "slots": self.slots, **self.options}
 
-    def run(self, request: dict, timeout_s: float) -> dict:
+    def run(self, request: dict, timeout_s: float = None) -> dict:
         request = {k: (str(v) if isinstance(v, Path) else v) for k, v in request.items()}
+        timeout_s = timeout_s or float(request.get("time_limit_s") or 3600) + TIMEOUT_GRACE_S
         t0 = time.time()
         with self._sem:
             queued = time.time() - t0
@@ -99,12 +112,18 @@ class Executor:
         result["executor"] = {**self.describe(), "queue_seconds": round(queued, 3)}
         return result
 
-    def map(self, requests, timeout_s: float):
-        """Run several requests concurrently (bounded by slots); results in input order."""
-        from concurrent.futures import ThreadPoolExecutor
+    def run_all(self, jobs, on_result):
+        """Run [(key, request), ...] concurrently (bounded by slots). `on_result(key, result)` is
+        called on the calling thread as each finishes, so callers can record results with
+        thread-bound resources (SQLite) and keep finished work if interrupted."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        with ThreadPoolExecutor(max_workers=max(1, min(self.slots, len(requests)))) as pool:
-            return list(pool.map(lambda r: self.run(r, timeout_s), requests))
+        if not jobs:
+            return
+        with ThreadPoolExecutor(max_workers=min(self.slots, len(jobs))) as pool:
+            futures = {pool.submit(self.run, request): key for key, request in jobs}
+            for f in as_completed(futures):
+                on_result(futures[f], f.result())
 
     def _execute(self, request: dict, timeout_s: float) -> dict:
         raise NotImplementedError
@@ -184,7 +203,7 @@ def execute_packed(packed: dict, task_root, timeout_s: float = None) -> dict:
     """Remote-side entry point: run one packed request in an isolated subprocess."""
     from .evaluator.runner import run_isolated
 
-    timeout_s = timeout_s or float(packed["request"].get("time_limit_s") or 7200) + 600
+    timeout_s = timeout_s or float(packed["request"].get("time_limit_s") or 7200) + TIMEOUT_GRACE_S
     with tempfile.TemporaryDirectory(prefix="cspace_remote_") as tmp:
         request = unpack_request(packed, task_root, tmp)
         result = run_isolated(request, timeout_s=timeout_s, stream_output=False)
