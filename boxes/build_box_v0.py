@@ -141,11 +141,15 @@ nodes = [
     n("c.tied", "method",
       "The input embedding and the output projection share one matrix.", "starting decoder",
       ["presswolf", "inan"], active=True, supports=[["e.tied_small"]]),
+    n("c.qk_norm", "method",
+      "Queries and keys are RMS-normalized per head before rotary embedding, bounding attention logits.",
+      "starting decoder", ["qknorm", "wortsman"], active=True, supports=[["c.kv_memory", "e.instability"]]),
     n("m.baseline", "method",
-      "Llama-style causal decoder (Transformer++): the starting formulation, assembled from the commitments above.",
+      "Llama-style causal decoder (Transformer++ with QK-norm): the starting formulation, assembled from the "
+      "commitments above.",
       "d_model 256, 6 layers, 4 heads: 5.9M parameters at vocabulary 4096", ["llama", "mad", "harness"], active=True,
       supports=[["c.fixed_depth", "c.unshared", "c.token_granularity", "c.kv_memory", "c.single_stream",
-                 "c.dense_ffn", "c.rope", "c.prenorm", "c.tied"]]),
+                 "c.dense_ffn", "c.rope", "c.prenorm", "c.tied", "c.qk_norm"]]),
 
     # ---------------- consequences and theoretical results ----------------
     n("t.kv_cost", "theorem",
@@ -313,8 +317,8 @@ nodes = [
       "see e.moe_granularity", ["moe", "switch", "olmoe"], supports=[["e.moe_granularity"]]),
     n("alt.position", "method", "ALiBi distance biases or no positional encoding (NoPE).", "see e.position",
       ["alibi", "haviv"], supports=[["e.position"]]),
-    n("alt.qk_norm", "method", "QK-normalization (and z-loss) for attention-logit stability.", "see e.instability",
-      ["qknorm", "wortsman"], supports=[["e.instability"]]),
+    n("alt.z_loss", "method", "Output z-loss: an auxiliary penalty on the log-partition of the output logits for "
+      "logit stability.", "see e.instability", ["wortsman"], supports=[["e.instability"]]),
 ]
 
 space = dict(

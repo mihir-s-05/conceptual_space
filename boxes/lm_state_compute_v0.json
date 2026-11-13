@@ -233,9 +233,27 @@
       ]
     },
     {
+      "id": "c.qk_norm",
+      "type": "method",
+      "statement": "Queries and keys are RMS-normalized per head before rotary embedding, bounding attention logits.",
+      "scope": "starting decoder",
+      "sources": [
+        "arXiv:2010.04245 Henry+ 2020, Query-Key Normalization",
+        "arXiv:2309.14322 Wortsman+ 2023, Small-scale proxies for training instabilities"
+      ],
+      "status": "established",
+      "active": true,
+      "supports": [
+        [
+          "c.kv_memory",
+          "e.instability"
+        ]
+      ]
+    },
+    {
       "id": "m.baseline",
       "type": "method",
-      "statement": "Llama-style causal decoder (Transformer++): the starting formulation, assembled from the commitments above.",
+      "statement": "Llama-style causal decoder (Transformer++ with QK-norm): the starting formulation, assembled from the commitments above.",
       "scope": "d_model 256, 6 layers, 4 heads: 5.9M parameters at vocabulary 4096",
       "sources": [
         "arXiv:2302.13971 Touvron+ 2023, LLaMA",
@@ -254,7 +272,8 @@
           "c.dense_ffn",
           "c.rope",
           "c.prenorm",
-          "c.tied"
+          "c.tied",
+          "c.qk_norm"
         ]
       ]
     },
@@ -971,12 +990,11 @@
       ]
     },
     {
-      "id": "alt.qk_norm",
+      "id": "alt.z_loss",
       "type": "method",
-      "statement": "QK-normalization (and z-loss) for attention-logit stability.",
+      "statement": "Output z-loss: an auxiliary penalty on the log-partition of the output logits for logit stability.",
       "scope": "see e.instability",
       "sources": [
-        "arXiv:2010.04245 Henry+ 2020, Query-Key Normalization",
         "arXiv:2309.14322 Wortsman+ 2023, Small-scale proxies for training instabilities"
       ],
       "status": "established",

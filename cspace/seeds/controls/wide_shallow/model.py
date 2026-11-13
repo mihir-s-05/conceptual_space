@@ -50,11 +50,14 @@ class Attention(nn.Module):
         self.n_heads = n_heads
         self.head_dim = d_model // n_heads
         self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
+        self.q_norm = RMSNorm(self.head_dim)  # QK-norm: bounds attention logits for stable training
+        self.k_norm = RMSNorm(self.head_dim)
         self.proj = nn.Linear(d_model, d_model, bias=False)
 
     def forward(self, x, cos, sin):
         B, T, C = x.shape
         q, k, v = self.qkv(x).view(B, T, 3, self.n_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, k = self.q_norm(q), self.k_norm(k)
         q, k = apply_rope(q, cos, sin), apply_rope(k, cos, sin)
         y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
         return self.proj(y.transpose(1, 2).reshape(B, T, C))

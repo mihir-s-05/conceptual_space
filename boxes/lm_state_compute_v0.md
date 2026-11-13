@@ -1,6 +1,6 @@
 # Box `lm-state-compute` v0
 
-60 nodes; an edge A -> B means B's recorded justification or construction uses A.
+61 nodes; an edge A -> B means B's recorded justification or construction uses A.
 
 ## Fixed requirements
 
@@ -45,7 +45,7 @@
 
 **`c.kv_memory`** (assumption, established, active): Sequence memory is the uncompressed set of all past keys and values at every layer, read by causal softmax attention; memory grows linearly with context and is never summarized.
   - scope: starting decoder
-  - supported by: (`def.mixing` + `e.recall_gap`); used by: `c.rope`, `m.baseline`, `t.kv_cost`
+  - supported by: (`def.mixing` + `e.recall_gap`); used by: `c.qk_norm`, `c.rope`, `m.baseline`, `t.kv_cost`
   - note: Justified mainly by recall: attention is the strongest known mechanism for associative recall.
   - source: arXiv:1706.03762 Vaswani+ 2017, Attention Is All You Need
 
@@ -81,9 +81,15 @@
   - source: arXiv:1608.05859 Press & Wolf 2016, Using the Output Embedding
   - source: arXiv:1611.01462 Inan+ 2016, Tying Word Vectors and Word Classifiers
 
-**`m.baseline`** (method, established, active): Llama-style causal decoder (Transformer++): the starting formulation, assembled from the commitments above.
+**`c.qk_norm`** (method, established, active): Queries and keys are RMS-normalized per head before rotary embedding, bounding attention logits.
+  - scope: starting decoder
+  - supported by: (`c.kv_memory` + `e.instability`); used by: `m.baseline`
+  - source: arXiv:2010.04245 Henry+ 2020, Query-Key Normalization
+  - source: arXiv:2309.14322 Wortsman+ 2023, Small-scale proxies for training instabilities
+
+**`m.baseline`** (method, established, active): Llama-style causal decoder (Transformer++ with QK-norm): the starting formulation, assembled from the commitments above.
   - scope: d_model 256, 6 layers, 4 heads: 5.9M parameters at vocabulary 4096
-  - supported by: (`c.fixed_depth` + `c.unshared` + `c.token_granularity` + `c.kv_memory` + `c.single_stream` + `c.dense_ffn` + `c.rope` + `c.prenorm` + `c.tied`); used by: -
+  - supported by: (`c.fixed_depth` + `c.unshared` + `c.token_granularity` + `c.kv_memory` + `c.single_stream` + `c.dense_ffn` + `c.rope` + `c.prenorm` + `c.tied` + `c.qk_norm`); used by: -
   - source: arXiv:2302.13971 Touvron+ 2023, LLaMA
   - source: arXiv:2403.17844 Poli+ 2024, Mechanistic Design and Scaling of Hybrid Architectures (MAD)
   - source: cspace profile on this harness (measured, Nov 2026)
@@ -265,7 +271,7 @@
 
 **`e.instability`** (empirical_claim, supported): Large-scale instabilities (attention-logit growth, output-logit divergence) reproduce in small models at high learning rates, and QK-normalization and z-loss mitigate them.
   - scope: small models
-  - supported by: root; used by: `alt.qk_norm`
+  - supported by: root; used by: `alt.z_loss`, `c.qk_norm`
   - source: arXiv:2309.14322 Wortsman+ 2023, Small-scale proxies for training instabilities
   - source: arXiv:2010.04245 Henry+ 2020, Query-Key Normalization
 
@@ -402,10 +408,9 @@
   - source: arXiv:2108.12409 Press+ 2021, ALiBi
   - source: arXiv:2203.16634 Haviv+ 2022, Transformer LMs without Positional Encodings
 
-**`alt.qk_norm`** (method, established): QK-normalization (and z-loss) for attention-logit stability.
+**`alt.z_loss`** (method, established): Output z-loss: an auxiliary penalty on the log-partition of the output logits for logit stability.
   - scope: see e.instability
   - supported by: (`e.instability`); used by: -
-  - source: arXiv:2010.04245 Henry+ 2020, Query-Key Normalization
   - source: arXiv:2309.14322 Wortsman+ 2023, Small-scale proxies for training instabilities
 
 ## Sources
