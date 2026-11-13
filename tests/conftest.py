@@ -40,12 +40,15 @@ def tiny_baseline(tmp_path):
 
 @pytest.fixture
 def tiny_task(tmp_path):
+    return make_tiny_task(tmp_path / "task")
+
+
+def make_tiny_task(root: Path) -> Path:
     """Synthetic corpus: documents drawn from 40 fixed patterns, so it is learnable."""
     V, T = 64, 32
     rng = np.random.default_rng(0)
     patterns = [rng.integers(1, V, size=rng.integers(8, 24)) for _ in range(40)]
-    root = tmp_path / "task"
-    root.mkdir()
+    root.mkdir(parents=True)
     files = {}
     for split, n_docs in (("train", 3000), ("dev", 300), ("confirm", 300)):
         docs = [np.append(patterns[i], 0) for i in rng.integers(0, len(patterns), size=n_docs)]

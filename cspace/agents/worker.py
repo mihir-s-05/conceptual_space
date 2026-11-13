@@ -176,14 +176,15 @@ class Worker:
                                   self._parent_block(), self._formulation_block(), self.plan.followup, self.plan.wave)
         messages = [{"role": "system", "content": system}, {"role": "user", "content": brief}]
         tools = self.tool_specs()
-        usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "reasoning_tokens": 0}
+        usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "reasoning_tokens": 0,
+                 "seconds": 0.0}
         try:
             while self.turn < int(self.cfg["max_turns"]) and not self.finished:
                 self.turn += 1
                 reply = self.llm.chat(messages, tools)
                 self.c.log_usage(reply.usage, self.plan.id)
                 usage["calls"] += 1
-                for k in ("prompt_tokens", "completion_tokens", "cached_tokens", "reasoning_tokens"):
+                for k in ("prompt_tokens", "completion_tokens", "cached_tokens", "reasoning_tokens", "seconds"):
                     usage[k] += reply.usage.get(k, 0) or 0
                 messages.append(reply.raw_message)
                 if not reply.tool_calls:

@@ -47,6 +47,8 @@ DEFAULT_CONFIG = dict(
     throttle=0.0,                    # fraction of wall-clock the GPU idles between steps (0 = off)
     temp_limit_c=None,               # pause training when the GPU reaches this temperature
     prices=None,                     # optional USD per 1M tokens: {"input", "cached_input", "output"}
+    executor={"kind": "local", "slots": 1},  # where evaluations run (cspace.executor); slots = concurrent runs
+    parallel_jobs=1,                 # jobs of one wave run concurrently (they share a frozen snapshot)
 )
 
 _SQL = """
@@ -204,15 +206,21 @@ class Campaign:
         self.archive.log_cost("inference", usage["prompt_tokens"] - cached, "input_tokens", job_id, meta)
         self.archive.log_cost("inference", cached, "cached_input_tokens", job_id, meta)
         self.archive.log_cost("inference", usage["completion_tokens"], "output_tokens", job_id, meta)
+        if usage.get("seconds"):
+            self.archive.log_cost("inference", usage["seconds"], "latency_seconds", job_id, meta)
         if prices:
             usd = ((usage["prompt_tokens"] - cached) * prices["input"] + cached * prices.get("cached_input", prices["input"])
                    + usage["completion_tokens"] * prices["output"]) / 1e6
             self.archive.log_cost("inference", usd, "usd", job_id, meta)
 
     # ---- evaluation --------------------------------------------------------
-    def evaluate(self, candidate_id, purpose, log=print):
-        from ..evaluator.runner import run_isolated
+    @property
+    def executor(self):
+        from ..executor import get_executor
 
+        return get_executor(self.config.get("executor"))
+
+    def evaluate(self, candidate_id, purpose, log=print):
         cand = self.archive.get_candidate(candidate_id)
         with tempfile.TemporaryDirectory(prefix="cspace_bundle_") as tmp:
             bundle = self.archive.materialize(cand["bundle_hash"], tmp)
@@ -220,7 +228,7 @@ class Campaign:
                            seeds=self.config["seeds"], device=self.config.get("device", "auto"),
                            time_limit_s=self.config["eval_time_limit_s"], max_params=int(self.config["max_params"]),
                            throttle=self.config.get("throttle", 0.0), temp_limit_c=self.config.get("temp_limit_c"))
-            result = run_isolated(request, timeout_s=self.config["eval_time_limit_s"] + 600, stream_output=False)
+            result = self.executor.run(request, timeout_s=self.config["eval_time_limit_s"] + 600)
         record = self.archive.add_experiment(result, candidate_id, purpose=purpose)
         log(f"    {candidate_id}: {record['status']}"
             + (f", dev loss {record['checkpoints'][-1]['dev_loss']:.4f}" if record.get("checkpoints") else "")
@@ -442,6 +450,15 @@ class Campaign:
         return True
 
     # ---- driver ------------------------------------------------------------
+    @staticmethod
+    def _run_job(worker_cls, camp, llm, plan, log):
+        log(f"  job {plan.id} ({plan.mode}, parent {plan.research_parent_id}, origin {plan.origin_id})")
+        job = worker_cls(camp, llm, plan, log=log).run()
+        camp.save_job(job)
+        log(f"  job {plan.id}: {job.status}"
+            + (f", candidate {job.final_candidate_id}" if job.final_candidate_id else "")
+            + (f", evidence {job.reflection.get('evidence_class')}" if job.reflection else ""))
+
     def run(self, waves: int, llm, log=print):
         from .worker import Worker
 
@@ -451,14 +468,24 @@ class Campaign:
             plans = self.plan_wave(wave)
             log(f"=== wave {wave}: " + ", ".join(f"{p.mode}<-{p.research_parent_id}" for p in plans))
             done = {j["plan"]["id"] for j in self.jobs(wave) if j["status"] != "planned"}
-            for plan in plans:
-                if plan.id in done:
-                    continue
-                log(f"  job {plan.id} ({plan.mode}, parent {plan.research_parent_id}, origin {plan.origin_id})")
-                job = Worker(self, llm, plan, log=log).run()
-                self.save_job(job)
-                log(f"  job {plan.id}: {job.status}"
-                    + (f", candidate {job.final_candidate_id}" if job.final_candidate_id else "")
-                    + (f", evidence {job.reflection.get('evidence_class')}" if job.reflection else ""))
+            todo = [p for p in plans if p.id not in done]
+            parallel = max(1, int(self.config.get("parallel_jobs", 1)))
+            if parallel == 1:
+                for plan in todo:
+                    self._run_job(Worker, self, llm, plan, log)
+            else:
+                # each thread gets its own connection; jobs of a wave read the same frozen snapshot
+                from concurrent.futures import ThreadPoolExecutor
+
+                def one(plan):
+                    camp = Campaign(self.name, root=self.dir.parent)
+                    try:
+                        self._run_job(Worker, camp, llm, plan, lambda m, j=plan.id: log(f"[{j}] {m.strip()}"))
+                    finally:
+                        camp.close()
+
+                with ThreadPoolExecutor(max_workers=parallel) as pool:
+                    for f in [pool.submit(one, p) for p in todo]:
+                        f.result()
             with self.db:
                 self._meta_set("next_wave", wave + 1)

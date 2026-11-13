@@ -59,6 +59,34 @@ python -m cspace campaign status pilot-dag
 python -m cspace campaign job pilot-dag j001_1 --transcript
 ```
 
+## Reports, Stage B comparison, confirmation
+
+```
+python -m cspace campaign report pilot-dag              # ledger, jobs, case cards (full + neutral), summary
+python -m cspace study compare s1 --pair dag1:flat1 --pair dag2:flat2 --pair dag3:flat3
+python -m cspace confirm init rep1 --campaign pilot-dag --candidate incumbent --split dev --seeds 1,2,3
+python -m cspace confirm run rep1
+```
+
+- **Campaign report** (`archive/campaigns/<name>/report/`) has these parts:
+  - a case ledger of every submitted candidate, including repaired attempts and ablations, with failure kind, deltas against the baseline at each checkpoint, probe deltas and costs;
+  - per-job rows: repairs, dependency retrievals before results, formulation edits, evidence class, token use and latency;
+  - case cards with commitment, mechanism, implementation evidence, outcomes and scope, in a full version and a condition-neutral version that flags terms that could reveal the arm;
+  - a summary.
+- **Study compare** (`archive/studies/<name>/`) has these parts:
+  - a check that each DAG/flat pair is matched on task, box, model, budgets, seeds, limits, waves and evaluator version (mismatched pairs are refused unless you pass `--allow-mismatch`);
+  - a per-pair metric table and counts of how many pairs favor each arm;
+  - the design caveats;
+  - a blinded pack with shuffled neutral cards, a judging sheet and a separate key.
+- **Confirmation** (`archive/confirmations/<name>/`) runs paired multi-seed runs of frozen candidates against the baseline, on dev (replication) or on the sealed confirm split. Results live outside the campaign archive, so agents never see them. Each candidate gets a t-interval with Bonferroni adjustment, and a candidate meets the threshold only if the upper bound of its interval is at or below -threshold.
+
+## Executors and parallelism
+
+Evaluations run through `cspace.executor` (`--executor`, `--slots`). `parallel_jobs` runs
+a wave's jobs concurrently; they share a frozen evidence snapshot. With one local GPU and
+`slots 1`, the agents' model calls overlap while training runs one at a time. Remote
+backends are the only piece left; see [CLOUD.md](CLOUD.md).
+
 ## Layout
 
 | Path | Role |
@@ -68,6 +96,9 @@ python -m cspace campaign job pilot-dag j001_1 --transcript
 | `cspace/evaluator/` | Locked evaluator: lint, engineering checks, compute-capped training, probes, pacing, isolated runner |
 | `cspace/agents/` | Research loop: LLM client, worker tools, wave scheduler, formulation patches |
 | `cspace/calibration.py` | Stage A calibration cohort |
+| `cspace/reporting.py` | Campaign reports, case cards, Stage B matched-pair comparison, blinded case pack |
+| `cspace/confirm.py` | Seed replication and sealed confirmation |
+| `cspace/executor.py` | Where evaluations run (local, loopback; remote backends plug in here) |
 | `cspace/seeds/controls/` | Known control architectures for calibration |
 | `boxes/` | Box v0 (60 nodes, 69 verified sources), rendered dossier, literature-search records |
 | `cspace/archive/` | Content-addressed artifact store, SQLite index, cost ledgers |

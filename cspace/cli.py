@@ -22,6 +22,18 @@ def _default_task_dir():
     sys.exit(f"specify --task (found {len(tasks)} task directories under {DATA_DIR})")
 
 
+def _executor_spec(args):
+    if not args.executor and not args.slots:
+        return None
+    spec = (json.loads(args.executor) if args.executor and args.executor.startswith("{")
+            else {"kind": args.executor or "local"})
+    if args.slots:
+        spec["slots"] = args.slots
+    from .executor import normalize_spec
+
+    return normalize_spec(spec)
+
+
 def _fracs(text):
     return tuple(float(f) for f in text.split(",") if f.strip())
 
@@ -140,6 +152,11 @@ def _run_evaluation(bundle_dir, task_dir, split, budget, seeds, args):
         from .evaluator.evaluate import evaluate_bundle
 
         return evaluate_bundle(**request)
+    if args.executor and args.executor != "local":
+        from .executor import get_executor
+
+        return get_executor(json.loads(args.executor) if args.executor.startswith("{") else args.executor).run(
+            request, timeout_s=args.time_limit + 600)
     from .evaluator.runner import run_isolated
 
     return run_isolated(request, timeout_s=args.time_limit + 600)
@@ -260,7 +277,8 @@ def cmd_campaign_init(args):
                            box=args.box, task=args.task, horizon_flops=args.horizon_flops,
                            smoke_fracs=list(_fracs(args.smoke_fracs)) if args.smoke_fracs else None,
                            max_turns=args.max_turns, device=args.device, throttle=args.throttle,
-                           temp_limit_c=args.temp_limit)
+                           temp_limit_c=args.temp_limit, executor=_executor_spec(args),
+                           parallel_jobs=args.parallel_jobs)
     print(f"created campaign {args.name} in {camp.dir}")
     print(json.dumps(camp.config, indent=2))
     camp.close()
@@ -326,7 +344,7 @@ def cmd_cohort_init(args):
 
     overrides = dict(sources=args.source or [], cap=args.cap, reform_quota=args.reform_quota, task=args.task,
                      horizon_flops=args.horizon_flops, device=args.device, throttle=args.throttle,
-                     temp_limit_c=args.temp_limit,
+                     temp_limit_c=args.temp_limit, executor=_executor_spec(args),
                      smoke_fracs=list(_fracs(args.smoke_fracs)) if args.smoke_fracs else None,
                      long_fracs=list(_fracs(args.long_fracs)) if args.long_fracs else None)
     if args.controls is not None:
@@ -355,6 +373,47 @@ def cmd_cohort(args):
             coh.run(until=args.cohort_command)
     finally:
         coh.close()
+
+
+def cmd_campaign_report(args):
+    from .reporting import report_campaign
+
+    rep = report_campaign(args.name, delta=args.delta)
+    print((rep["dir"] / "summary.md").read_text(encoding="utf-8"))
+    print(f"wrote ledger, jobs, case cards and summary to {rep['dir']}")
+
+
+def cmd_study_compare(args):
+    from .reporting import compare
+
+    pairs = []
+    for p in args.pair:
+        dag, _, flat = p.partition(":")
+        if not dag or not flat:
+            sys.exit(f"--pair expects DAG_CAMPAIGN:FLAT_CAMPAIGN, got {p!r}")
+        pairs.append((dag, flat))
+    compare(args.study, pairs, delta=args.delta, seed=args.seed, allow_mismatch=args.allow_mismatch)
+
+
+def cmd_confirm(args):
+    from .confirm import Confirmation
+
+    if args.confirm_command == "init":
+        conf = Confirmation.create(
+            args.name, campaign=args.campaign, candidates=args.candidate or None, split=args.split,
+            seeds=[int(s) for s in args.seeds.split(",")] if args.seeds else None,
+            fracs=list(_fracs(args.fracs)) if args.fracs else None, threshold=args.threshold,
+            device=args.device, throttle=args.throttle, temp_limit_c=args.temp_limit, executor=_executor_spec(args))
+        print(f"created confirmation {args.name} (spec {conf.spec_hash[:12]}): candidates {conf.spec['candidates']}, "
+              f"baseline {conf.spec['baseline']}, split {conf.spec['split']}, seeds {conf.spec['seeds']}")
+        conf.close()
+        return
+    conf = Confirmation(args.name)
+    try:
+        conf.run() if args.confirm_command == "run" else conf.report()
+        print((conf.dir / "report.md").read_text(encoding="utf-8"))
+    finally:
+        conf.close()
 
 
 def cmd_box(args):
@@ -420,6 +479,7 @@ def main(argv=None):
         s.add_argument("--device", default="auto")
         s.add_argument("--time-limit", type=float, default=3600.0, help="graceful limit in seconds")
         s.add_argument("--no-isolate", action="store_true", help="run in-process (debugging)")
+        s.add_argument("--executor", help="executor kind or JSON spec (default local), e.g. loopback")
         s.add_argument("--throttle", type=float, default=0.0,
                        help="fraction of wall-clock the GPU idles between steps, e.g. 0.5 (results unchanged)")
         s.add_argument("--temp-limit", type=int, help="pause training while the GPU is at or above this temperature (C)")
@@ -486,6 +546,9 @@ def main(argv=None):
     c.add_argument("--device", choices=["auto", "cuda", "cpu"])
     c.add_argument("--throttle", type=float, help="GPU idle fraction between steps, e.g. 0.5")
     c.add_argument("--temp-limit", type=int, help="pause training at this GPU temperature (C)")
+    c.add_argument("--executor", help="executor kind or JSON spec, e.g. local or '{\"kind\": \"modal\", \"slots\": 4}'")
+    c.add_argument("--slots", type=int, help="concurrent evaluations through the executor")
+    c.add_argument("--parallel-jobs", type=int, help="jobs of a wave run concurrently (default 1)")
     c.set_defaults(func=cmd_campaign_init)
     c = csub.add_parser("run", help="run waves (resumes where it stopped)")
     c.add_argument("name")
@@ -499,6 +562,41 @@ def main(argv=None):
     c.add_argument("job")
     c.add_argument("--transcript", action="store_true")
     c.set_defaults(func=cmd_campaign_job)
+    c = csub.add_parser("report", help="case ledger, case cards (full and condition-neutral), summary")
+    c.add_argument("name")
+    c.add_argument("--delta", type=float, default=0.02, help="improvement threshold in nats for counting")
+    c.set_defaults(func=cmd_campaign_report)
+
+    s = sub.add_parser("study", help="Stage B: compare matched DAG/flat campaign pairs")
+    ssub = s.add_subparsers(dest="study_command", required=True)
+    c = ssub.add_parser("compare", help="matched-pair comparison plus a blinded case pack")
+    c.add_argument("study")
+    c.add_argument("--pair", action="append", required=True, help="DAG_CAMPAIGN:FLAT_CAMPAIGN (repeatable)")
+    c.add_argument("--delta", type=float, default=0.02)
+    c.add_argument("--seed", type=int, default=0, help="shuffle seed for blinded cases")
+    c.add_argument("--allow-mismatch", action="store_true", help="report, rather than refuse, unmatched settings")
+    c.set_defaults(func=cmd_study_compare)
+
+    s = sub.add_parser("confirm", help="seed replication (dev) or sealed confirmation (confirm split)")
+    fsub = s.add_subparsers(dest="confirm_command", required=True)
+    c = fsub.add_parser("init", help="freeze candidates, seeds and split")
+    c.add_argument("name")
+    c.add_argument("--campaign", required=True)
+    c.add_argument("--candidate", action="append", help="candidate id or 'incumbent' (repeatable; default incumbent)")
+    c.add_argument("--split", choices=["dev", "confirm"])
+    c.add_argument("--seeds", help="comma-separated seeds, e.g. 1,2,3")
+    c.add_argument("--fracs", help="checkpoints as fractions of the campaign horizon (last is analysed)")
+    c.add_argument("--threshold", type=float, help="practical improvement threshold (nats)")
+    c.add_argument("--device", choices=["auto", "cuda", "cpu"])
+    c.add_argument("--throttle", type=float)
+    c.add_argument("--temp-limit", type=int)
+    c.add_argument("--executor")
+    c.add_argument("--slots", type=int)
+    c.set_defaults(func=cmd_confirm)
+    for name in ("run", "report"):
+        c = fsub.add_parser(name, help="run missing evaluations and report" if name == "run" else "report only")
+        c.add_argument("name")
+        c.set_defaults(func=cmd_confirm)
 
     s = sub.add_parser("cohort", help="Stage A calibration cohort: smoke tests vs longer runs")
     hsub = s.add_subparsers(dest="cohort_command", required=True)
@@ -516,6 +614,8 @@ def main(argv=None):
     c.add_argument("--device", choices=["auto", "cuda", "cpu"])
     c.add_argument("--throttle", type=float, help="GPU idle fraction between steps, e.g. 0.5")
     c.add_argument("--temp-limit", type=int, help="pause training at this GPU temperature (C)")
+    c.add_argument("--executor", help="executor kind or JSON spec, e.g. local or '{\"kind\": \"modal\", \"slots\": 4}'")
+    c.add_argument("--slots", type=int, help="concurrent evaluations through the executor")
     c.set_defaults(func=cmd_cohort_init)
     for name, text in (("enroll", "enroll members by the frozen outcome-blind rule"),
                        ("smoke", "run smoke tests for every member and the baseline"),

@@ -60,6 +60,7 @@ DEFAULT_SPEC = dict(
     temp_limit_c=None,
     eval_time_limit_s=7200.0,
     max_params=60_000_000,
+    executor={"kind": "local", "slots": 1},  # cspace.executor spec; slots > 1 runs members concurrently
 )
 
 _SQL = """
@@ -229,7 +230,8 @@ class Cohort:
             rows = camp.db.execute(
                 "SELECT c.id, c.created, c.action_mode, cm.change_type, cm.smoke_experiment_id "
                 "FROM candidates c JOIN candidate_meta cm ON cm.candidate_id = c.id "
-                "ORDER BY c.created, c.id").fetchall()
+                # creation order = (wave, job id, submission time): stable even when a wave's jobs ran in parallel
+                "ORDER BY cm.creation_wave, cm.job_id, c.created, c.id").fetchall()
             out, skipped = [], []
             for r in rows:
                 if r["action_mode"] not in AGENT_MODES:
@@ -293,7 +295,7 @@ class Cohort:
             for camp in opened:
                 camp.close()
         record = {
-            "rule": "creation order; engineering-valid (checks.passed) only; stratified by pre-result change_type "
+            "rule": "creation order (wave, job, submission); engineering-valid (checks.passed) only; stratified by pre-result change_type "
                     "or researcher override; exact duplicates once; losses never read",
             "cap": cap, "reformulation_slots": n_ref,
             "available": {"reformulation": len(ref), "ordinary": len(ordn)},
@@ -344,23 +346,21 @@ class Cohort:
             camp.close()
         return None
 
-    def _evaluate(self, member, phase, log):
-        from .evaluator.runner import run_isolated
-
+    def _request(self, member, phase, tmp):
+        """Evaluation request for a member (materializes its bundle; call on the owning thread)."""
         cand = self.archive.get_candidate(member["candidate_id"])
-        with tempfile.TemporaryDirectory(prefix="cspace_bundle_") as tmp:
-            bundle = self.archive.materialize(cand["bundle_hash"], tmp)
-            request = dict(bundle_dir=str(bundle), task_dir=self.spec["task"], split="dev",
-                           budget=self._budget(phase), seeds=self._seeds(phase), device=self.spec["device"],
-                           time_limit_s=self.spec["eval_time_limit_s"], max_params=int(self.spec["max_params"]),
-                           throttle=self.spec["throttle"], temp_limit_c=self.spec["temp_limit_c"])
-            return run_isolated(request, timeout_s=self.spec["eval_time_limit_s"] + 600, stream_output=False)
+        bundle = self.archive.materialize(cand["bundle_hash"], Path(tmp) / f"{member['member_id']}_{phase}")
+        return dict(bundle_dir=str(bundle), task_dir=self.spec["task"], split="dev",
+                    budget=self._budget(phase), seeds=self._seeds(phase), device=self.spec["device"],
+                    time_limit_s=self.spec["eval_time_limit_s"], max_params=int(self.spec["max_params"]),
+                    throttle=self.spec["throttle"], temp_limit_c=self.spec["temp_limit_c"])
 
     def run_phase_runs(self, phase, log=print):
         assert phase in ("smoke", "long")
         if phase == "long" and not self.phase_done("screen"):
             raise CohortError("screening decisions must be frozen before any long run (run `screen` first)")
         members = sorted(self.members(), key=lambda m: m["enroll_order"])  # baseline (order 0) first
+        pending = []
         for m in members:
             exp, _ = self.run_of(m["member_id"], phase)
             if exp is not None:
@@ -369,19 +369,34 @@ class Cohort:
             if reused:
                 src_exp, ref = reused
                 result = {k: v for k, v in src_exp.items() if k not in ("id", "candidate_id", "replay_of", "purpose")}
-                record = self.archive.add_experiment(result, m["candidate_id"], purpose=f"{phase} (reused {ref})")
+                self._record_run(m, phase, result, ref, log)
                 log(f"  {m['member_id']}: reused smoke run {ref}")
             else:
-                log(f"  {m['member_id']} ({m['provenance']}): {phase} run ...")
-                result = self._evaluate(m, phase, log)
-                record = self.archive.add_experiment(result, m["candidate_id"], purpose=phase)
-                ref = None
-                last = (record.get("checkpoints") or [{}])[-1]
-                log(f"    {record['status']}" + (f", dev loss {last['dev_loss']:.4f}" if "dev_loss" in last else "")
-                    + (f" ({(record.get('error') or '').splitlines()[0][:120]})" if record["status"] != "ok" else ""))
-            with self.db:
-                self.db.execute("INSERT INTO runs VALUES (?, ?, ?, ?)", (m["member_id"], phase, record["id"], ref))
+                pending.append(m)
+        # fresh runs go through the executor concurrently (bounded by its slots); results are
+        # recorded on this thread as they finish, so an interruption keeps every finished run
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from .executor import get_executor
+
+        ex = get_executor(self.spec.get("executor"))
+        timeout = self.spec["eval_time_limit_s"] + 600
+        with tempfile.TemporaryDirectory(prefix="cspace_bundle_") as tmp,                 ThreadPoolExecutor(max_workers=max(1, min(ex.slots, len(pending) or 1))) as pool:
+            futures = {}
+            for m in pending:  # archive access stays on this thread; workers only run the executor
+                log(f"  {m['member_id']} ({m['provenance']}): {phase} run queued")
+                futures[pool.submit(ex.run, self._request(m, phase, tmp), timeout)] = m
+            for f in as_completed(futures):
+                self._record_run(futures[f], phase, f.result(), None, log)
         self._set(f"done_{phase}", time.time())
+
+    def _record_run(self, m, phase, result, ref, log):
+        record = self.archive.add_experiment(result, m["candidate_id"], purpose=phase + (f" (reused {ref})" if ref else ""))
+        if not ref:
+            last = (record.get("checkpoints") or [{}])[-1]
+            log(f"  {m['member_id']}: {record['status']}" + (f", dev loss {last['dev_loss']:.4f}" if "dev_loss" in last else "")
+                + (f" ({(record.get('error') or '').splitlines()[0][:120]})" if record["status"] != "ok" else ""))
+        with self.db:
+            self.db.execute("INSERT INTO runs VALUES (?, ?, ?, ?)", (m["member_id"], phase, record["id"], ref))
 
     def _deltas(self, member_id, phase):
         """Per-checkpoint (frac, candidate loss - baseline loss) for a member's run."""
