@@ -6,6 +6,7 @@ full horizon; a smoke test simply stops at an earlier checkpoint, so short and
 long runs share the same schedule prefix (no schedule confound).
 """
 
+import gc
 import math
 import time
 from contextlib import nullcontext
@@ -89,25 +90,111 @@ def autocast_for(device):
 
 
 @torch.no_grad()
+def to_device(t, device):
+    """Host-to-device copy that does not stall the GPU queue: copies from pageable memory
+    synchronize the stream first, so the GPU would idle while the CPU queued each step."""
+    if device.type == "cuda":
+        return t.pin_memory().to(device, non_blocking=True)
+    return t.to(device)
+
+
 def eval_loss(model, stream, batch_size, max_tokens, device, autocast_ctx, kernel_ctx=nullcontext):
     was_training = model.training
     model.eval()
-    total, count = 0.0, 0
+    losses = []  # (per-batch mean loss tensor, tokens); read back once, summed in the same order
     try:
         for x, y in stream.eval_batches(batch_size, max_tokens):
-            x, y = x.to(device), y.to(device)
+            x, y = to_device(x, device), to_device(y, device)
             with kernel_ctx(), autocast_ctx():
                 _, ce = forward_loss(model, x, y)
-            total += ce.item() * y.numel()
-            count += y.numel()
+            losses.append((ce.detach(), y.numel()))
     finally:
         model.train(was_training)
+    total, count = 0.0, 0
+    for ce, n in losses:
+        total += ce.item() * n
+        count += n
     return total / count, count
 
 
 def _sync(device):
     if device.type == "cuda":
         torch.cuda.synchronize(device)
+
+
+class GraphedStep:
+    """Forward+backward recorded as a CUDA graph and replayed with one CPU call per step.
+
+    Replay runs the same kernels in the same order as eager execution, so results are
+    bitwise identical; it removes the per-kernel CPU launch cost that dominates small models
+    on a throttled CPU. Gradients live in static memory that each replay overwrites, so the
+    caller must not reset them to None between steps."""
+
+    def __init__(self, graph, x, y, total, ce, grads):
+        self.graph, self.x, self.y, self.total, self.ce, self.grads = graph, x, y, total, ce, grads
+
+    def relink(self, model):
+        """Point .grad back at the graph's static gradient buffers (after anything set them to None)."""
+        for p, g in zip(model.parameters(), self.grads):
+            p.grad = g
+
+    def __call__(self, x, y):
+        self.x.copy_(x, non_blocking=True)
+        self.y.copy_(y, non_blocking=True)
+        self.graph.replay()
+        return self.total, self.ce
+
+
+def capture_step(model, batches, device, autocast_ctx, kernel_ctx, warmup=3):
+    """Record forward+backward as a CUDA graph if replay is bitwise identical to eager on every
+    batch in `batches` (several, so frozen data-dependent paths or per-call Python state are
+    caught). Returns (GraphedStep or None, reason). Leaves gradients set to None on failure."""
+    if device.type != "cuda":
+        return None, "not a CUDA device"
+
+    def eager(x, y):
+        model.zero_grad(set_to_none=True)
+        with kernel_ctx(), autocast_ctx():
+            total, ce = forward_loss(model, x, y)
+        total.backward()
+        grads = [None if p.grad is None else p.grad.clone() for p in model.parameters()]
+        return total.detach().clone(), ce.detach().clone(), grads
+
+    try:
+        expected = [eager(x, y) for x, y in batches]
+        sx, sy = batches[0][0].clone(), batches[0][1].clone()
+        side = torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(side):
+            for _ in range(warmup):
+                model.zero_grad(set_to_none=True)
+                with kernel_ctx(), autocast_ctx():
+                    total, _ = forward_loss(model, sx, sy)
+                total.backward()
+        torch.cuda.current_stream().wait_stream(side)
+        model.zero_grad(set_to_none=True)
+        # nothing may free pinned host memory or touch the device from Python GC during capture
+        torch.cuda.synchronize(device)
+        gc.collect()
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph, capture_error_mode="relaxed"):
+            with kernel_ctx(), autocast_ctx():
+                total, ce = forward_loss(model, sx, sy)
+            total.backward()
+        step = GraphedStep(graph, sx, sy, total, ce, [p.grad for p in model.parameters()])
+        for (x, y), (e_total, e_ce, e_grads) in zip(batches, expected):
+            g_total, g_ce = step(x, y)
+            same = torch.equal(g_total, e_total) and torch.equal(g_ce, e_ce) and all(
+                (eg is None and p.grad is None) or (eg is not None and p.grad is not None and torch.equal(p.grad, eg))
+                for p, eg in zip(model.parameters(), e_grads))
+            if not same:
+                model.zero_grad(set_to_none=True)
+                return None, "graph replay was not bitwise identical to eager execution"
+        return step, "ok"
+    except Exception as e:  # capture is not possible for every candidate (syncs, dynamic shapes, ...)
+        torch.cuda.synchronize(device)
+        model.zero_grad(set_to_none=True)
+        return None, f"capture failed: {type(e).__name__}: {str(e).splitlines()[0][:200]}"
 
 
 def select_attention_backend(model, x, y, device, autocast_ctx):
@@ -150,7 +237,7 @@ def attention_context(name):
 
 
 def train_candidate(model, task, recipe, budget: Budget, seeds: dict, device,
-                    time_limit_s=None, remeasure_every=200, log=print, pacer=None) -> dict:
+                    time_limit_s=None, remeasure_every=200, log=print, pacer=None, cuda_graph=True) -> dict:
     device = torch.device(device)
     pacer = pacer or Pacer(device, log=log)
     ctx = autocast_for(device)
@@ -166,17 +253,25 @@ def train_candidate(model, task, recipe, budget: Budget, seeds: dict, device,
         torch.cuda.reset_peak_memory_stats(device)
 
     px, py = (t.to(device) for t in train.random_batch(B, probe_rng))
-    # FLOPs are an accounting convention: always measured under default kernel
-    # selection, independent of the kernel pinned for execution below.
+    # Attention kernel and CUDA graph come before FLOP counting: capture fails after the counter has run.
+    attention_backend, attention_ctx = select_attention_backend(model, px, py, device, ctx)
+    graphed, graph_reason = None, "disabled"
+    if cuda_graph:
+        check = [(px, py)] + [tuple(t.to(device) for t in train.random_batch(B, probe_rng)) for _ in range(2)]
+        graphed, graph_reason = capture_step(model, check, device, ctx, attention_ctx)
+    # FLOPs are an accounting convention: always measured under the math kernel,
+    # independent of the kernel pinned for execution.
     flops_per_step = measure_step_flops(model, px, py, ctx)
     if flops_per_step <= 0:
         raise RuntimeError("FLOP counter measured zero FLOPs; the model uses no counted operations")
     fwd_flops_per_token = measure_forward_flops(model, px, ctx) / (B * T)
+    if graphed:
+        graphed.relink(model)  # FLOP counting reset the gradients to None
     horizon_steps = max(1, math.ceil(budget.horizon_flops / flops_per_step))
     targets = [f * budget.horizon_flops for f in budget.checkpoint_fracs]
-    attention_backend, attention_ctx = select_attention_backend(model, px, py, device, ctx)
     log(f"  {flops_per_step / 1e9:.2f} GFLOP/step, horizon {horizon_steps} steps, "
-        f"checkpoints at {[round(f, 4) for f in budget.checkpoint_fracs]}, attention kernel {attention_backend}")
+        f"checkpoints at {[round(f, 4) for f in budget.checkpoint_fracs]}, attention kernel {attention_backend}, "
+        f"CUDA graph {'on' if graphed else 'off (' + graph_reason + ')'}")
 
     flops_history = [[0, flops_per_step]]
     checkpoints, loss_trace = [], []
@@ -191,14 +286,18 @@ def train_candidate(model, task, recipe, budget: Budget, seeds: dict, device,
         lr = lr_at(step, horizon_steps, recipe)
         for group in opt.param_groups:
             group["lr"] = lr
-        x, y = (t.to(device, non_blocking=True) for t in train.random_batch(B, data_rng))
+        x, y = (to_device(t, device) for t in train.random_batch(B, data_rng))
         pacer.step_start()
-        with attention_ctx(), ctx():  # backward reuses the kernel chosen in forward
-            total, ce = forward_loss(model, x, y)
-        total.backward()
+        if graphed:
+            total, ce = graphed(x, y)  # overwrites the static gradients
+        else:
+            with attention_ctx(), ctx():  # backward reuses the kernel chosen in forward
+                total, ce = forward_loss(model, x, y)
+            total.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
         opt.step()
-        opt.zero_grad(set_to_none=True)
+        if not graphed:
+            opt.zero_grad(set_to_none=True)
 
         loss_sum += ce.detach()
         loss_n += 1
@@ -222,7 +321,8 @@ def train_candidate(model, task, recipe, budget: Budget, seeds: dict, device,
             loss_trace.append([step, cum_flops, mean_loss])
 
         if remeasure_every and step % remeasure_every == 0 and step < horizon_steps:
-            flops_per_step = measure_step_flops(model, px, py, ctx)
+            if not graphed:  # a replayed graph executes exactly the captured kernels: FLOPs are constant
+                flops_per_step = measure_step_flops(model, px, py, ctx)
             flops_history.append([step, flops_per_step])
 
         while next_ck < len(targets) and (cum_flops >= targets[next_ck] * (1 - 1e-9) or step >= horizon_steps):
@@ -255,6 +355,7 @@ def train_candidate(model, task, recipe, budget: Budget, seeds: dict, device,
         flops_history=flops_history,
         fwd_flops_per_token=fwd_flops_per_token,
         peak_mem_bytes=torch.cuda.max_memory_allocated(device) if device.type == "cuda" else None,
+        cuda_graph={"used": graphed is not None, "reason": graph_reason},
     )
     return dict(status=status, checkpoints=checkpoints, loss_trace=loss_trace, costs=costs,
                 attention_backend=attention_backend)
