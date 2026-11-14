@@ -38,13 +38,13 @@ def _counting_kernel():
 
 
 def measure_step_flops(model, x, y, autocast_ctx) -> int:
-    """FLOPs of one forward+backward pass on (x, y). Leaves no gradients behind."""
-    model.zero_grad(set_to_none=True)
+    """FLOPs of one forward+backward pass on (x, y). Leaves every .grad untouched, so it can run
+    mid-training (and alongside a CUDA graph that owns the gradient buffers)."""
+    params = [p for p in model.parameters() if p.requires_grad]
     with FlopCounterMode(display=False) as counter:
         with _counting_kernel(), autocast_ctx():
             total, _ = forward_loss(model, x, y)
-        total.backward()
-    model.zero_grad(set_to_none=True)
+        torch.autograd.grad(total, params, allow_unused=True)
     return int(counter.get_total_flops())
 
 
