@@ -7,14 +7,17 @@ the `cspace` package; the project itself has no name yet. The research plan is i
 
 ## How it works
 
-![Pipeline: the box feeds agents, whose model changes are smoke-tested and archived; results are shared with the next wave and feed Stages A and B](docs/pipeline.svg)
+![Pipeline: agents question an assumption from the box, smoke-test the changed model, and add it to an archive that grows into a tree of models; each wave branches from that tree, and the archive feeds Stages A and B](docs/pipeline.svg)
 
-Each wave, agents pick an assumption from the box, predict what changing it will do, edit
-the model, and test it with a short training run on the same compute budget as the
-baseline. Results go to the archive and are shared with the next wave. Training is the
-only part that needs a GPU: today it runs on one local GPU, and with cloud GPUs the
-executor runs many smoke tests in parallel while the agents and archive stay local (see
-[CLOUD.md](CLOUD.md)). Rebuild the figure with `python docs/build_figure.py`.
+Each wave, four agents pick an assumption from the box, predict what changing it will do,
+edit the model, and test it with a short training run on the same compute budget as the
+baseline. Every result, including dead ends, joins the archive as a child of the model it
+came from, so the archive grows into a tree. The next wave branches from that tree,
+starting from the current best and from the least-explored models, and one agent per wave
+reconstructs from scratch in a fresh context. The agents themselves
+stay fixed; what evolves is the population of models. Training is the only part that
+needs a GPU; with cloud GPUs the smoke tests run in parallel (see [CLOUD.md](CLOUD.md)).
+Rebuild the figure with `python docs/build_figure.py`.
 
 ## Setup
 
