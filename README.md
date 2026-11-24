@@ -5,6 +5,17 @@ reformulations, and test them with compute-capped training runs. The code lives 
 the `cspace` package; the project itself has no name yet. The research plan is in
 [SPEC.md](SPEC.md).
 
+## How it works
+
+![Pipeline: the box feeds agents, whose model changes are smoke-tested and archived; results are shared with the next wave and feed Stages A and B](docs/pipeline.svg)
+
+Each wave, agents pick an assumption from the box, predict what changing it will do, edit
+the model, and test it with a short training run on the same compute budget as the
+baseline. Results go to the archive and are shared with the next wave. Training is the
+only part that needs a GPU: today it runs on one local GPU, and with cloud GPUs the
+executor runs many smoke tests in parallel while the agents and archive stay local (see
+[CLOUD.md](CLOUD.md)). Rebuild the figure with `python docs/build_figure.py`.
+
 ## Setup
 
 ```
